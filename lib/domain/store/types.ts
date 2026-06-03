@@ -12,6 +12,4 @@ export type StoreProfile = {
   longitude: number;
   enabledUberDirect: boolean;
   enabledDoorDashDrive: boolean;
-  whatsappEnabled: boolean;
-  whatsappPhoneNumberId?: string;
 };

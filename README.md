@@ -199,6 +199,8 @@ Use this before going live:
 | `WHATSAPP_APP_SECRET` | Meta app secret (webhook signature verify) |
 | `WHATSAPP_VERIFY_TOKEN` | Custom string for GET webhook verification |
 | `WHATSAPP_PHONE_NUMBER_ID` | Meta Phone number ID from API Setup |
+| `WHATSAPP_STAFF_PHONES` | Comma-separated allowlisted staff phones (+15195550100) |
+| `WHATSAPP_STORE_ID` | Optional store ID (defaults to first store in DB) |
 
 4. Run migrations against Neon once:
 
@@ -223,7 +225,6 @@ All dashboard API routes require an authenticated session except webhook routes 
 | `/api/webhooks/uber` | POST | HMAC signature |
 | `/api/webhooks/doordash` | POST | Authorization header |
 | `/api/webhooks/whatsapp` | GET, POST | Verify token / HMAC signature |
-| `/api/store/whatsapp` | GET, PATCH, POST, DELETE | Session |
 | `/api/me` | GET | Session |
 | `/api/health` | GET | Public |
 
@@ -395,7 +396,7 @@ Staff text your Meta WhatsApp test number → deliverGO matches **Customers**, q
 1. Create a Meta app with **Connect with customers through WhatsApp**
 2. In **WhatsApp → API Setup**, copy **Phone number ID** and generate an access token
 3. Add your staff phone as a **test recipient** (up to 5 numbers)
-4. Set env vars: `WHATSAPP_ENABLED=true`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`
+4. Set env vars (see table above), including `WHATSAPP_STAFF_PHONES` with your verified test number
 5. Register webhook URL (requires public HTTPS):
 
 ```
@@ -404,12 +405,7 @@ https://your-app.vercel.app/api/webhooks/whatsapp
 
 Subscribe to **messages**. Use the same string for Meta verify token and `WHATSAPP_VERIFY_TOKEN`.
 
-### deliverGO setup
-
-1. Open **Store profile → WhatsApp dispatch**
-2. Enable WhatsApp, paste **Phone number ID**
-3. Add allowlisted **staff phones** (same numbers verified in Meta)
-4. Text the bot: `PING` → `pong`, then send a customer name → quote → `YES`
+Restart the dev server after changing `.env`, then text the bot: `PING` → `pong`, then a customer name → quote → `YES`.
 
 Local dev: use ngrok the same way as Uber webhooks:
 

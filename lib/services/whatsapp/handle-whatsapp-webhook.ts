@@ -98,7 +98,6 @@ export async function handleWhatsAppWebhook(
       text: message.text,
       phoneNumberId: message.phoneNumberId,
       isStaffAllowed,
-      whatsappEnabled: store.whatsappEnabled,
       getConversation: () => whatsappRepository.getConversation(store.id, staffPhoneE164),
       saveConversation: async (conversation) => {
         await whatsappRepository.saveConversation({

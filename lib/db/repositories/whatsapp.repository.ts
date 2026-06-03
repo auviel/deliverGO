@@ -5,7 +5,11 @@ import type {
   WhatsAppSessionPayload,
 } from "@/lib/domain/whatsapp/types";
 import { WHATSAPP_CONVERSATION_TTL_MS } from "@/lib/domain/whatsapp/types";
-import { getWhatsAppConfig } from "@/lib/integrations/whatsapp/config";
+import {
+  getWhatsAppConfig,
+  getWhatsAppStaffPhonesFromEnv,
+  getWhatsAppStoreId,
+} from "@/lib/integrations/whatsapp/config";
 
 type ConversationRecord = {
   id: string;
@@ -36,67 +40,35 @@ function mapConversation(record: {
 
 export const whatsappRepository = {
   async findStoreByPhoneNumberId(phoneNumberId: string) {
-    const byStore = await prisma.store.findFirst({
-      where: {
-        whatsappEnabled: true,
-        whatsappPhoneNumberId: phoneNumberId,
-      },
-    });
-
-    if (byStore) {
-      return byStore;
-    }
-
     const config = getWhatsAppConfig();
-    if (config?.phoneNumberId === phoneNumberId) {
-      return prisma.store.findFirst({
-        where: { whatsappEnabled: true },
-        orderBy: { createdAt: "asc" },
-      });
+    if (!config || config.phoneNumberId !== phoneNumberId) {
+      return null;
     }
 
-    return null;
+    const storeId = getWhatsAppStoreId();
+    if (storeId) {
+      return prisma.store.findUnique({ where: { id: storeId } });
+    }
+
+    return prisma.store.findFirst({ orderBy: { createdAt: "asc" } });
   },
 
-  async isStaffAllowed(storeId: string, phoneE164: string): Promise<boolean> {
+  async isStaffAllowed(_storeId: string, phoneE164: string): Promise<boolean> {
+    const envPhones = getWhatsAppStaffPhonesFromEnv();
+    if (envPhones.length > 0) {
+      return envPhones.includes(phoneE164);
+    }
+
     const staffPhone = await prisma.whatsAppStaffPhone.findUnique({
       where: {
         storeId_phoneE164: {
-          storeId,
+          storeId: _storeId,
           phoneE164,
         },
       },
     });
 
     return Boolean(staffPhone);
-  },
-
-  async listStaffPhones(storeId: string) {
-    return prisma.whatsAppStaffPhone.findMany({
-      where: { storeId },
-      orderBy: { createdAt: "asc" },
-    });
-  },
-
-  async addStaffPhone(input: { storeId: string; phoneE164: string; label?: string }) {
-    return prisma.whatsAppStaffPhone.create({
-      data: {
-        storeId: input.storeId,
-        phoneE164: input.phoneE164,
-        label: input.label?.trim() || null,
-      },
-    });
-  },
-
-  async removeStaffPhone(storeId: string, phoneE164: string) {
-    return prisma.whatsAppStaffPhone.delete({
-      where: {
-        storeId_phoneE164: {
-          storeId,
-          phoneE164,
-        },
-      },
-    });
   },
 
   async getConversation(storeId: string, staffPhoneE164: string): Promise<ConversationRecord | null> {
@@ -158,26 +130,6 @@ export const whatsappRepository = {
       where: {
         storeId,
         staffPhoneE164,
-      },
-    });
-  },
-
-  async updateWhatsAppSettings(
-    storeId: string,
-    input: {
-      whatsappEnabled?: boolean;
-      whatsappPhoneNumberId?: string | null;
-    },
-  ) {
-    return prisma.store.update({
-      where: { id: storeId },
-      data: {
-        ...(input.whatsappEnabled !== undefined
-          ? { whatsappEnabled: input.whatsappEnabled }
-          : {}),
-        ...(input.whatsappPhoneNumberId !== undefined
-          ? { whatsappPhoneNumberId: input.whatsappPhoneNumberId }
-          : {}),
       },
     });
   },

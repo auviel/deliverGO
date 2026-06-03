@@ -3,13 +3,13 @@ import { DELIVERY_PROVIDER_LABELS } from "@/lib/domain/delivery/types";
 import {
   buildHelpMessage,
   buildUnauthorizedMessage,
-  buildWhatsAppDisabledMessage,
   formatEta,
   formatFee,
   parseWhatsAppCommand,
   type WhatsAppProviderOption,
   type WhatsAppSessionPayload,
 } from "@/lib/domain/whatsapp/types";
+import { isWhatsAppEnabled } from "@/lib/integrations/whatsapp/config";
 import { sendTextMessage } from "@/lib/integrations/whatsapp/client";
 import { createDeliveryForStore } from "@/lib/services/delivery/create-delivery";
 import { createQuoteForStore } from "@/lib/services/delivery/create-quote";
@@ -23,7 +23,6 @@ type HandleIncomingMessageInput = {
   text: string;
   phoneNumberId: string;
   isStaffAllowed: boolean;
-  whatsappEnabled: boolean;
   getConversation: () => Promise<{
     state: string;
     payload: WhatsAppSessionPayload;
@@ -180,8 +179,7 @@ async function startQuoteFlow(
 export async function handleIncomingWhatsAppMessage(
   input: HandleIncomingMessageInput,
 ): Promise<void> {
-  if (!input.whatsappEnabled) {
-    await reply(input.staffPhoneE164, buildWhatsAppDisabledMessage(), input.phoneNumberId);
+  if (!isWhatsAppEnabled()) {
     return;
   }
 

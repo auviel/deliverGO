@@ -17,8 +17,6 @@ export function mapStoreToProfile(store: Store): StoreProfile {
     longitude: store.longitude,
     enabledUberDirect: store.enabledUberDirect,
     enabledDoorDashDrive: store.enabledDoorDashDrive,
-    whatsappEnabled: store.whatsappEnabled,
-    whatsappPhoneNumberId: store.whatsappPhoneNumberId ?? undefined,
   };
 }
 

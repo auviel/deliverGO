@@ -252,7 +252,9 @@ WHATSAPP_APP_SECRET=""             # App secret — webhook signature verify
 WHATSAPP_VERIFY_TOKEN=""           # Custom string for GET webhook verification
 WHATSAPP_PHONE_NUMBER_ID=""        # Default for single-store dev; per-store in DB for prod
 WHATSAPP_BUSINESS_ACCOUNT_ID=""    # WABA ID (optional logging)
-WHATSAPP_API_VERSION="v21.0"       # Graph API version
+WHATSAPP_API_VERSION="v25.0"       # Match Meta app Graph API version
+WHATSAPP_STAFF_PHONES=""           # Comma-separated E.164 (+15195550100)
+WHATSAPP_STORE_ID=""               # Optional — defaults to first store in DB
 ```
 
 ---
@@ -279,7 +281,7 @@ WHATSAPP_API_VERSION="v21.0"       # Graph API version
 
 - [x] Migration: `WhatsAppStaffPhone`, store WhatsApp fields, `WhatsAppConversation`
 - [x] `lib/db/repositories/whatsapp.repository.ts`
-- [x] Dashboard: Store profile section — enable WhatsApp, manage staff numbers (or seed-only for MVP)
+- [x] Dashboard: env-only config (no store profile UI); staff allowlist via `WHATSAPP_STAFF_PHONES`
 - [x] `resolveStoreFromWebhook(phoneNumberId)` — map Meta number → `storeId` (`findStoreByPhoneNumberId`)
 - [x] `isStaffAllowed(storeId, phoneE164)` — gate all commands
 
