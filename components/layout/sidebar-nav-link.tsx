@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 
 type SidebarNavLinkProps = {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: ReactNode;
   exact?: boolean;
   excludePaths?: string[];
 };
@@ -16,7 +16,7 @@ type SidebarNavLinkProps = {
 export function SidebarNavLink({
   href,
   label,
-  icon: Icon,
+  icon,
   exact = false,
   excludePaths = [],
 }: SidebarNavLinkProps) {
@@ -39,7 +39,9 @@ export function SidebarNavLink({
       )}
       aria-current={isActive ? "page" : undefined}
     >
-      <Icon className="h-5 w-5" aria-hidden />
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden>
+        {icon}
+      </span>
       {label}
     </Link>
   );

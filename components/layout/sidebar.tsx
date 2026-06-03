@@ -9,7 +9,7 @@ export async function Sidebar() {
   const session = await auth();
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-border bg-surface md:flex md:flex-col">
+    <aside className="hidden w-60 shrink-0 self-stretch border-r border-border bg-surface md:flex md:min-h-0 md:flex-col">
       <div className="border-b border-border px-5 py-6">
         <div className="flex items-center justify-between gap-2">
           <span className="text-lg font-semibold tracking-tight">deliverGO</span>
@@ -21,13 +21,13 @@ export async function Sidebar() {
         <SidebarNavLink
           href="/dashboard/deliveries"
           label="Deliveries"
-          icon={Package}
+          icon={<Package className="h-5 w-5" />}
           excludePaths={["/dashboard/deliveries/new"]}
         />
         <SidebarNavLink
           href="/dashboard/deliveries/new"
           label="New delivery"
-          icon={Plus}
+          icon={<Plus className="h-5 w-5" />}
         />
       </nav>
 

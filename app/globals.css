@@ -59,7 +59,7 @@
   }
 
   body {
-    @apply min-h-full bg-background text-foreground font-sans antialiased;
+    @apply min-h-dvh bg-background text-foreground font-sans antialiased;
   }
 
   a {

@@ -13,18 +13,20 @@ export default function DashboardLayout({
   return (
     <DashboardProviders>
       <SkipLink />
-      <div className="flex min-h-full flex-col bg-background">
+      <div className="flex min-h-dvh flex-col bg-background">
         <SandboxBanner />
         <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
             <TopBar />
             <main
               id="main-content"
               tabIndex={-1}
-              className="flex-1 overflow-auto pb-20 focus:outline-none md:pb-0"
+              className="flex min-h-0 flex-1 flex-col overflow-auto pb-20 focus:outline-none md:pb-0"
             >
-              <div className="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">{children}</div>
+              <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col p-4 md:p-6 lg:p-8">
+                {children}
+              </div>
             </main>
           </div>
         </div>

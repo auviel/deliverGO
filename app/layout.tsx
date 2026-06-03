@@ -19,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-CA" className={`${inter.variable} h-full`}>
-      <body className="min-h-full">
+    <html lang="en-CA" className={`${inter.variable} h-full min-h-dvh`}>
+      <body className="min-h-dvh">
         <AuthSessionProvider>{children}</AuthSessionProvider>
       </body>
     </html>
