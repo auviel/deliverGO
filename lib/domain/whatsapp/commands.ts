@@ -128,9 +128,83 @@ export function parseNewCustomerMultiline(rawText: string): NewCustomerFields | 
   return { name, phone, address };
 }
 
-/** Try delimiter one-liner first, then multiline block. */
+/** Try delimiter one-liner first, then multiline block (with optional NEW prefix). */
 export function parseNewCustomerFields(rawText: string): NewCustomerFields | null {
-  return parseNewCustomerOneLine(rawText) ?? parseNewCustomerMultiline(rawText);
+  return (
+    parseNewCustomerOneLine(rawText) ??
+    parseNewCustomerMultiline(rawText) ??
+    parsePlainCustomerOneLine(rawText) ??
+    parsePlainCustomerMultiline(rawText)
+  );
+}
+
+/**
+ * Multiline without NEW — e.g. pasted customer details:
+ *   Val
+ *   5193300303
+ *   123 Roger St, Waterloo
+ */
+export function parsePlainCustomerMultiline(rawText: string): NewCustomerFields | null {
+  const trimmed = rawText.trim();
+  if (NEW_COMMAND.test(trimmed) || !/\r?\n/.test(trimmed)) {
+    return null;
+  }
+
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length < 3) {
+    return null;
+  }
+
+  const name = lines[0]!;
+  const phone = normalizeCanadianPhone(lines[1]!);
+  if (!phone || HELP_ALIASES.has(name.toLowerCase())) {
+    return null;
+  }
+
+  const address = lines.slice(2).join(", ").trim();
+  if (address.length < 5) {
+    return null;
+  }
+
+  return { name, phone, address };
+}
+
+/** One line without NEW — e.g. Val,5193300303,123 Roger St, Waterloo */
+export function parsePlainCustomerOneLine(rawText: string): NewCustomerFields | null {
+  const trimmed = rawText.trim();
+  if (NEW_COMMAND.test(trimmed) || /\r?\n/.test(trimmed)) {
+    return null;
+  }
+
+  const delimiterMatch = trimmed.match(/[|,;]/);
+  if (!delimiterMatch) {
+    return null;
+  }
+
+  const delimiter = delimiterMatch[0]!;
+  const parts = trimmed
+    .split(delimiter)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const phone = normalizeCanadianPhone(parts[1]!);
+  if (!phone) {
+    return null;
+  }
+
+  return {
+    name: parts[0]!,
+    phone,
+    address: parts.slice(2).join(delimiter === "," ? ", " : delimiter).trim(),
+  };
 }
 
 /** Partial multiline: name + phone on two lines after NEW — wizard continues at address. */
@@ -235,6 +309,16 @@ export function parseWhatsAppCommand(
   const sendMatch = text.match(/^(?:send|\/send)\s+(.+)$/i);
   if (sendMatch?.[1]?.trim()) {
     return { type: "customer_name", name: sendMatch[1].trim() };
+  }
+
+  const plainCustomer = parsePlainCustomerMultiline(text) ?? parsePlainCustomerOneLine(text);
+  if (plainCustomer) {
+    return {
+      type: "new_one_line",
+      name: plainCustomer.name,
+      phone: plainCustomer.phone,
+      address: plainCustomer.address,
+    };
   }
 
   return { type: "customer_name", name: text };

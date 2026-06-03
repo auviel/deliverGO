@@ -4,8 +4,8 @@ export function buildHelpMessage(): string {
   return [
     "deliverGO dispatch",
     "• Customer name → quote → Send",
-    "• NEW → add customer step-by-step",
-    "• NEW Name, phone, address (comma, |, or 3 lines)",
+    "• NEW (any case) or 3 lines: name / phone / address",
+    "• NEW Name, phone, address (comma, |, or line breaks)",
     "• HELP · CANCEL · PING",
   ].join("\n");
 }

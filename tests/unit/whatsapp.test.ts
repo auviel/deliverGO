@@ -6,6 +6,8 @@ import {
   parseNewCustomerMultiline,
   parseNewCustomerOneLine,
   parseNewCustomerPartialMultiline,
+  parsePlainCustomerMultiline,
+  parsePlainCustomerOneLine,
   parseWhatsAppCommand,
 } from "@/lib/domain/whatsapp/commands";
 import { buildHelpMessage } from "@/lib/domain/whatsapp/messages";
@@ -222,6 +224,42 @@ describe("whatsapp command parser", () => {
       name: "Val",
       phone: "+15193300303",
       address: "123 Roger St",
+    });
+  });
+
+  it("parses NEW case-insensitively", () => {
+    expect(parseWhatsAppCommand("new")).toEqual({ type: "new_wizard", name: undefined });
+    expect(parseWhatsAppCommand("New Val")).toEqual({ type: "new_wizard", name: "Val" });
+    expect(parseWhatsAppCommand("/NEW Val")).toEqual({ type: "new_wizard", name: "Val" });
+    expect(parseWhatsAppCommand("nEw VaL\n5193300303\n123 Roger St, Waterloo")).toEqual({
+      type: "new_one_line",
+      name: "VaL",
+      phone: "+15193300303",
+      address: "123 Roger St, Waterloo",
+    });
+  });
+
+  it("parses plain multiline without NEW prefix", () => {
+    const message = "Val\n5193300303\n123 Roger St, Waterloo";
+    expect(parsePlainCustomerMultiline(message)).toEqual({
+      name: "Val",
+      phone: "+15193300303",
+      address: "123 Roger St, Waterloo",
+    });
+    expect(parseWhatsAppCommand(message)).toEqual({
+      type: "new_one_line",
+      name: "Val",
+      phone: "+15193300303",
+      address: "123 Roger St, Waterloo",
+    });
+  });
+
+  it("parses plain one-line without NEW prefix", () => {
+    expect(parseWhatsAppCommand("Val,5193300303,123 Roger St, Waterloo")).toEqual({
+      type: "new_one_line",
+      name: "Val",
+      phone: "+15193300303",
+      address: "123 Roger St, Waterloo",
     });
   });
 
