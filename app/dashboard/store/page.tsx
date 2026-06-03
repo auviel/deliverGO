@@ -1,6 +1,7 @@
 import { DashboardPage, DashboardPageBody, PageHeader } from "../layout";
 import { StoreProfileForm } from "@/components/features/store/store-profile-form";
 import { requireSessionContext } from "@/lib/auth/session";
+import { isDoorDashConfigured, isUberConfigured } from "@/lib/config/environment";
 
 export default async function StoreProfilePage() {
   const { store } = await requireSessionContext();
@@ -9,7 +10,13 @@ export default async function StoreProfilePage() {
     <DashboardPage>
       <PageHeader title="Store profile" />
       <DashboardPageBody>
-        <StoreProfileForm store={store} />
+        <StoreProfileForm
+          store={store}
+          configuredProviders={{
+            uber: isUberConfigured(),
+            doordash: isDoorDashConfigured(),
+          }}
+        />
       </DashboardPageBody>
     </DashboardPage>
   );

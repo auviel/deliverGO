@@ -32,6 +32,7 @@ export function AddressAutocomplete({
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const skipNextSuggestRef = useRef(false);
+  const userEditedRef = useRef(false);
 
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -40,6 +41,14 @@ export function AddressAutocomplete({
   const [suggestError, setSuggestError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userEditedRef.current) {
+      setSuggestions([]);
+      setIsOpen(false);
+      setActiveIndex(-1);
+      setSuggestError(null);
+      return;
+    }
+
     const query = value.trim();
 
     if (skipNextSuggestRef.current) {
@@ -160,6 +169,7 @@ export function AddressAutocomplete({
           activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined
         }
         onChange={(event) => {
+          userEditedRef.current = true;
           onChange(event.target.value);
         }}
         onFocus={() => {

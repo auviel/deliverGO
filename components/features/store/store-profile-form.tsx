@@ -20,6 +20,10 @@ import type { GeocodedAddress } from "@/lib/integrations/geocoding/types";
 
 type StoreProfileFormProps = {
   store: StoreProfile;
+  configuredProviders: {
+    uber: boolean;
+    doordash: boolean;
+  };
 };
 
 function buildAddressQuery(store: StoreProfile): string {
@@ -40,7 +44,7 @@ async function readApiError(response: Response): Promise<string> {
   return body.error ?? "Unable to save store profile. Please try again.";
 }
 
-export function StoreProfileForm({ store }: StoreProfileFormProps) {
+export function StoreProfileForm({ store, configuredProviders }: StoreProfileFormProps) {
   const router = useRouter();
   const { update: updateSession } = useSession();
   const { success, error: toastError } = useToast();
@@ -56,6 +60,13 @@ export function StoreProfileForm({ store }: StoreProfileFormProps) {
   );
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [enabledUberDirect, setEnabledUberDirect] = useState(store.enabledUberDirect);
+  const [enabledDoorDashDrive, setEnabledDoorDashDrive] = useState(
+    store.enabledDoorDashDrive,
+  );
+  const [doordashExternalStoreId, setDoordashExternalStoreId] = useState(
+    store.doordashExternalStoreId ?? "",
+  );
   const [fieldErrors, setFieldErrors] = useState<StoreProfileFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,6 +143,9 @@ export function StoreProfileForm({ store }: StoreProfileFormProps) {
           phone: phone.trim(),
           addressLine2: addressLine2.trim() || undefined,
           addressQuery: addressQuery.trim(),
+          enabledUberDirect,
+          enabledDoorDashDrive,
+          doordashExternalStoreId: doordashExternalStoreId.trim() || undefined,
         }),
       });
 
@@ -242,6 +256,72 @@ export function StoreProfileForm({ store }: StoreProfileFormProps) {
           />
         </CardContent>
       </Card>
+
+      {configuredProviders.uber || configuredProviders.doordash ? (
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-foreground">Delivery carriers</h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Choose which providers appear when quoting a new delivery. Credentials still
+              come from environment variables.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {configuredProviders.uber ? (
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border-strong"
+                  checked={enabledUberDirect}
+                  onChange={(event) => setEnabledUberDirect(event.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-foreground">
+                    Uber Direct
+                  </span>
+                  <span className="block text-sm text-text-secondary">
+                    Quote and dispatch via Uber Direct.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
+            {configuredProviders.doordash ? (
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border-strong"
+                  checked={enabledDoorDashDrive}
+                  onChange={(event) => setEnabledDoorDashDrive(event.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-foreground">
+                    DoorDash Drive
+                  </span>
+                  <span className="block text-sm text-text-secondary">
+                    Quote and dispatch via DoorDash Dashers.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
+            {configuredProviders.doordash ? (
+              <FormField
+                id="doordashExternalStoreId"
+                label="DoorDash external store ID"
+                hint={`Defaults to this store's deliverGO id (${store.id}). Register the same value in the DoorDash Developer Portal.`}
+              >
+                <Input
+                  name="doordashExternalStoreId"
+                  value={doordashExternalStoreId}
+                  onChange={(event) => setDoordashExternalStoreId(event.target.value)}
+                  placeholder={store.id}
+                />
+              </FormField>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {formError ? (
         <p className="text-sm text-error" role="alert">

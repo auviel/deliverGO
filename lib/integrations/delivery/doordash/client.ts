@@ -1,4 +1,3 @@
-import { logger } from "@/lib/utils/logger";
 import { generateDeliveryExternalId } from "@/lib/utils/id";
 import type {
   ProviderCancelRequest,
@@ -7,16 +6,22 @@ import type {
   ProviderQuote,
   ProviderQuoteRequest,
 } from "../types";
-import { createDoorDashJwt } from "./auth";
+import { buildDoorDashCancelBody } from "../cancel-reasons";
 import { getDoorDashConfig, type DoorDashConfig } from "./config";
 import { mapDoorDashApiError } from "./errors";
 import {
   buildDoorDashAcceptQuoteBody,
   buildDoorDashQuoteBody,
+  buildDoorDashServiceabilityBody,
   mapDoorDashDeliveryResponse,
   mapDoorDashQuoteResponse,
 } from "./mappers";
-import type { DoorDashDeliveryResponse, DoorDashQuoteResponse } from "./types";
+import type {
+  DoorDashDeliveryResponse,
+  DoorDashQuoteResponse,
+  DoorDashServiceabilityResponse,
+} from "./types";
+import { doordashRequest } from "./request";
 
 export class DoorDashDriveClient {
   constructor(private readonly config: DoorDashConfig) {}
@@ -26,6 +31,8 @@ export class DoorDashDriveClient {
   }
 
   async createQuote(input: ProviderQuoteRequest): Promise<ProviderQuote> {
+    await this.checkServiceability(input);
+
     const externalDeliveryId = generateDeliveryExternalId();
     const raw = await this.request<DoorDashQuoteResponse>("/drive/v2/quotes", {
       method: "POST",
@@ -70,12 +77,37 @@ export class DoorDashDriveClient {
 
   async cancelDelivery(
     externalDeliveryId: string,
-    _input: ProviderCancelRequest,
+    input: ProviderCancelRequest,
   ): Promise<void> {
     await this.request<unknown>(
       `/drive/v2/deliveries/${encodeURIComponent(externalDeliveryId)}/cancel`,
-      { method: "PUT" },
+      {
+        method: "PUT",
+        body: buildDoorDashCancelBody(input),
+      },
     );
+  }
+
+  async checkServiceability(input: ProviderQuoteRequest): Promise<void> {
+    const raw = await this.request<DoorDashServiceabilityResponse>(
+      "/drive/v2/serviceability",
+      {
+        method: "POST",
+        body: buildDoorDashServiceabilityBody(
+          input,
+          this.config.externalBusinessId,
+        ),
+      },
+    );
+
+    if (raw.is_serviceable === false) {
+      const reasons = raw.reasons_not_serviceable?.join(", ");
+      throw mapDoorDashApiError(400, {
+        message: reasons
+          ? `DoorDash cannot deliver to this address: ${reasons}`
+          : "DoorDash cannot deliver to this address.",
+      });
+    }
   }
 
   private async request<T>(
@@ -85,31 +117,7 @@ export class DoorDashDriveClient {
       body?: Record<string, unknown>;
     },
   ): Promise<T> {
-    const token = createDoorDashJwt(this.config);
-    const url = `${this.config.apiBase}${path}`;
-
-    const response = await fetch(url, {
-      method: options.method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-    });
-
-    const text = await response.text();
-    const parsed = text ? JSON.parse(text) : {};
-
-    if (!response.ok) {
-      logger.error("doordash.api.error", {
-        path,
-        status: response.status,
-        message: (parsed as { message?: string }).message,
-      });
-      throw mapDoorDashApiError(response.status, parsed);
-    }
-
-    return parsed as T;
+    return doordashRequest<T>(this.config, path, options);
   }
 }
 

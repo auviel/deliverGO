@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight, Package, SearchX } from "lucide-react";
 import type { DeliveryListItem } from "@/lib/domain/delivery/types";
 import type { DeliveryListFilter } from "@/lib/domain/delivery/filters";
+import { DeliveryProviderBadge } from "@/components/features/deliveries/delivery-provider-badge";
 import { DeliveryStatusBadge } from "@/components/features/deliveries/delivery-status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PrimaryLink } from "@/components/layout/page-header";
@@ -33,7 +34,7 @@ export function DeliveryListEmpty({
       className="flex-1"
       icon={<Package className="h-6 w-6" aria-hidden />}
       title="No deliveries yet"
-      description="Create your first delivery to dispatch an Uber Direct courier from your store."
+      description="Create your first delivery to compare Uber Direct and DoorDash Drive quotes."
       action={<PrimaryLink href="/dashboard/deliveries/new">New delivery</PrimaryLink>}
     />
   );
@@ -66,6 +67,7 @@ function DeliveryListRow({ delivery }: { delivery: DeliveryListItem }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium text-foreground">{delivery.dropoffName}</p>
+            <DeliveryProviderBadge providerId={delivery.providerId} />
             <span className="max-w-full truncate font-mono text-xs text-text-tertiary">
               {delivery.externalId}
             </span>

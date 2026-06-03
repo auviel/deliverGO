@@ -50,18 +50,23 @@ export function mapDoorDashStatusToDomain(status: string | undefined): DeliveryS
   const map: Record<string, DeliveryStatus> = {
     created: "pending",
     confirmed: "pending",
+    quote: "pending",
     scheduled: "scheduled",
     dasher_confirmed: "en_route_to_pickup",
     enroute_to_pickup: "en_route_to_pickup",
     arrived_at_pickup: "arrived_at_pickup",
+    at_pickup: "arrived_at_pickup",
     picked_up: "en_route_to_dropoff",
     enroute_to_dropoff: "en_route_to_dropoff",
     arrived_at_dropoff: "arrived_at_dropoff",
+    at_dropoff: "arrived_at_dropoff",
     delivered: "completed",
     dropped_off: "completed",
     cancelled: "cancelled",
     canceled: "cancelled",
+    delivery_cancelled: "cancelled",
     failed: "failed",
+    delivery_attempted: "failed",
   };
 
   return map[normalized] ?? "pending";
@@ -161,6 +166,25 @@ export function buildDoorDashQuoteBody(
   return body;
 }
 
+export function buildDoorDashServiceabilityBody(
+  input: ProviderQuoteRequest,
+  externalBusinessId: string,
+) {
+  if (!input.pickupContact || !input.dropoffContact) {
+    throw new Error("DoorDash serviceability checks require pickup and dropoff contact details.");
+  }
+
+  return {
+    pickup_address: formatDoorDashAddress(input.pickup),
+    dropoff_address: formatDoorDashAddress(input.dropoff),
+    pickup_external_business_id: externalBusinessId,
+    pickup_external_store_id: input.externalStoreId ?? externalBusinessId,
+    dropoff_phone_number: formatDoorDashPhone(input.dropoffContact.phone),
+    order_value: 1000,
+    ...(input.pickupReadyAt ? { pickup_time: input.pickupReadyAt.toISOString() } : {}),
+  };
+}
+
 export function buildDoorDashAcceptQuoteBody(input: ProviderCreateDeliveryRequest) {
   const dropoffOptions: Record<string, unknown> = {};
 
@@ -194,12 +218,16 @@ export function mapDoorDashWebhookStatus(
   const normalized = (eventType ?? "").toLowerCase();
 
   const eventMap: Record<string, string> = {
+    delivery_created: "created",
     dasher_confirmed: "dasher_confirmed",
     dasher_enroute_to_pickup: "enroute_to_pickup",
+    dasher_at_pickup: "arrived_at_pickup",
     dasher_picked_up: "picked_up",
     dasher_enroute_to_dropoff: "enroute_to_dropoff",
+    dasher_at_dropoff: "arrived_at_dropoff",
     dasher_dropped_off: "delivered",
     delivery_cancelled: "cancelled",
+    delivery_attempted: "failed",
   };
 
   return eventMap[normalized] ?? normalized;

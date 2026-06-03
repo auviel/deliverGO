@@ -91,7 +91,10 @@ export function DeliveryDetailView({ delivery }: DeliveryDetailViewProps) {
           ) : null}
 
           {delivery.cancellable ? (
-            <CancelDeliveryButton deliveryId={delivery.id} />
+            <CancelDeliveryButton
+              deliveryId={delivery.id}
+              providerId={delivery.providerId}
+            />
           ) : null}
         </div>
       </div>

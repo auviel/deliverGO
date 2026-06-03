@@ -64,6 +64,7 @@ export type DeliveryRecord = {
 export type DeliveryListItem = {
   id: string;
   externalId: string;
+  providerId: DeliveryProviderId;
   dropoffName: string;
   dropoffAddress: string;
   status: DeliveryStatus;

@@ -5,6 +5,7 @@ import type { DeliveryDetail } from "@/lib/domain/delivery/types";
 import { isCancellable } from "@/lib/domain/delivery/status";
 import type { DeliveryProviderId } from "@/lib/domain/delivery/types";
 import { cancelDeliverySchema } from "@/lib/domain/delivery/validation";
+import { buildProviderCancelRequest } from "@/lib/integrations/delivery/cancel-reasons";
 import { getDeliveryProviderById } from "@/lib/integrations/delivery/provider.registry";
 import { AppError } from "@/lib/utils/errors";
 import { logger } from "@/lib/utils/logger";
@@ -39,12 +40,13 @@ export async function cancelDelivery(
   }
 
   const provider = getDeliveryProviderById(delivery.providerId as DeliveryProviderId);
-
-  await provider.cancelDelivery(delivery.providerDeliveryId, {
+  const cancelRequest = buildProviderCancelRequest({
+    providerId: delivery.providerId as DeliveryProviderId,
     reason: parsed.reason,
     details: parsed.details,
-    cancellingParty: "MERCHANT",
   });
+
+  await provider.cancelDelivery(delivery.providerDeliveryId, cancelRequest);
 
   const updated = await deliveryRepository.update(id, user.storeId, {
     status: "cancelled",

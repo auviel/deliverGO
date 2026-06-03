@@ -88,6 +88,7 @@ async function main() {
 
   console.log("Seed complete:");
   console.log(`  Store: ${store.name} (${store.id})`);
+  console.log(`  DoorDash external_store_id: ${store.doordashExternalStoreId ?? store.id}`);
   console.log(`  Coords: ${store.latitude}, ${store.longitude}`);
   console.log(`  User:  ${SEED_USER.email}`);
   console.log(`  Login password: ${SEED_USER.password} (dev only)`);

@@ -6,6 +6,7 @@ import {
   getRecommendedQuote,
   isRecommendedQuote,
 } from "@/lib/domain/delivery/compare-quotes";
+import { getQuoteAcceptWindowLabel } from "@/lib/domain/delivery/quote-display";
 import {
   DELIVERY_PROVIDER_LABELS,
   type DeliveryQuote,
@@ -101,11 +102,14 @@ function QuoteOption({
               className={`flex items-center gap-1.5 text-sm ${isExpired ? "text-error" : "text-text-secondary"}`}
             >
               <Clock className="h-4 w-4 shrink-0" aria-hidden />
-              {isExpired ? (
-                <span>Quote expired</span>
-              ) : (
-                <span>Valid for {formatCountdown(remainingSeconds)}</span>
-              )}
+            {isExpired ? (
+              <span>Quote expired</span>
+            ) : (
+              <span>
+                Valid for {formatCountdown(remainingSeconds)} ·{" "}
+                {getQuoteAcceptWindowLabel(quote.providerId)}
+              </span>
+            )}
             </div>
           </div>
 

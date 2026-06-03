@@ -39,6 +39,9 @@ model Store {
   country      String   @default("CA")
   latitude     Float
   longitude    Float
+  enabledUberDirect       Boolean  @default(true)
+  enabledDoorDashDrive    Boolean  @default(true)
+  doordashExternalStoreId String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

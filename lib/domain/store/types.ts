@@ -10,4 +10,7 @@ export type StoreProfile = {
   country: string;
   latitude: number;
   longitude: number;
+  enabledUberDirect: boolean;
+  enabledDoorDashDrive: boolean;
+  doordashExternalStoreId: string | null;
 };

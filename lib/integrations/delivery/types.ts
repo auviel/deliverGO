@@ -74,6 +74,8 @@ export type ProviderCancelRequest = {
   reason: string;
   details?: string;
   cancellingParty: "MERCHANT" | "CUSTOMER";
+  /** Provider-specific cancel code when supported (e.g. DoorDash reason_code). */
+  providerReasonCode?: string;
 };
 
 export type ProviderWebhookEvent = {

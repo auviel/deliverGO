@@ -75,6 +75,7 @@ export function mapDeliveryToListItem(delivery: Delivery): DeliveryListItem {
   return {
     id: delivery.id,
     externalId: delivery.externalId,
+    providerId: delivery.providerId as DeliveryListItem["providerId"],
     dropoffName: delivery.dropoffName,
     dropoffAddress: delivery.dropoffAddress,
     status: delivery.status as DeliveryStatus,

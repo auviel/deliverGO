@@ -60,6 +60,7 @@ describe("reviveDeliveryListItems", () => {
       {
         id: "del_1",
         externalId: "DG-1",
+        providerId: "uber_direct",
         dropoffName: "Jane",
         dropoffAddress: "123 King St",
         status: "pending",

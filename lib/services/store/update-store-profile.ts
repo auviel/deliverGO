@@ -63,6 +63,17 @@ export async function updateStoreProfile(
     country: geocoded.address.country,
     latitude: geocoded.address.latitude,
     longitude: geocoded.address.longitude,
+    ...(parsed.enabledUberDirect !== undefined
+      ? { enabledUberDirect: parsed.enabledUberDirect }
+      : {}),
+    ...(parsed.enabledDoorDashDrive !== undefined
+      ? { enabledDoorDashDrive: parsed.enabledDoorDashDrive }
+      : {}),
+    ...(parsed.doordashExternalStoreId !== undefined
+      ? {
+          doordashExternalStoreId: parsed.doordashExternalStoreId.trim() || null,
+        }
+      : {}),
   });
 
   return mapStoreToProfile(updated);

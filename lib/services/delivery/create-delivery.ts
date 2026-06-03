@@ -9,6 +9,7 @@ import {
   formatStoreProfileAddress,
   storeProfileToAddress,
 } from "@/lib/domain/store/format";
+import { getDoorDashExternalStoreId } from "@/lib/domain/store/delivery-settings";
 import { getDeliveryProviderById } from "@/lib/integrations/delivery/provider.registry";
 import type { ProviderDelivery, ProviderQuoteRequest } from "@/lib/integrations/delivery/types";
 import { geocodeAddress } from "@/lib/services/geocoding/geocode-address";
@@ -65,7 +66,7 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
       name: parsed.dropoffName.trim(),
       phone: dropoffPhone,
     },
-    externalStoreId: store.id,
+    externalStoreId: getDoorDashExternalStoreId(store),
   };
 
   async function dispatchWithQuote(activeQuoteId: string): Promise<ProviderDelivery> {

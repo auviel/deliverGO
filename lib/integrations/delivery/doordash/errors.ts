@@ -29,6 +29,15 @@ export function mapDoorDashApiError(status: number, body: unknown): AppError {
   }
 
   if (status === 400) {
+    const combined = `${message} ${fieldErrors ?? ""}`.toLowerCase();
+    if (combined.includes("same country") && combined.includes("default store")) {
+      return new AppError(
+        "VALIDATION_ERROR",
+        "DoorDash pickup must be in the same country as your DoorDash account store. Canadian addresses require Canada sandbox access — request it in the Developer Portal under Support (category: Drive), then run npm run doordash:register-store to sync your store address.",
+        400,
+      );
+    }
+
     return new AppError(
       "VALIDATION_ERROR",
       fieldErrors ? `DoorDash rejected the request: ${fieldErrors}` : message,

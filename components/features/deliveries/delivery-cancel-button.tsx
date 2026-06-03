@@ -5,25 +5,27 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import type { DeliveryProviderId } from "@/lib/domain/delivery/types";
+import { DELIVERY_PROVIDER_LABELS } from "@/lib/domain/delivery/types";
+import { getCancelReasonLabel } from "@/lib/integrations/delivery/cancel-reasons";
 import type { CancelDeliverySchema } from "@/lib/domain/delivery/validation";
 
-const CANCEL_REASONS: {
-  value: CancelDeliverySchema["reason"];
-  label: string;
-}[] = [
-  { value: "CUSTOMER_CALLED_TO_CANCEL", label: "Customer called to cancel" },
-  { value: "OUT_OF_ITEMS", label: "Out of items" },
-  { value: "RESTAURANT_TOO_BUSY", label: "Restaurant too busy" },
-  { value: "OTHER", label: "Other" },
+const CANCEL_REASONS: CancelDeliverySchema["reason"][] = [
+  "CUSTOMER_CALLED_TO_CANCEL",
+  "OUT_OF_ITEMS",
+  "RESTAURANT_TOO_BUSY",
+  "OTHER",
 ];
 
 type CancelDeliveryButtonProps = {
   deliveryId: string;
+  providerId: DeliveryProviderId;
   disabled?: boolean;
 };
 
 export function CancelDeliveryButton({
   deliveryId,
+  providerId,
   disabled = false,
 }: CancelDeliveryButtonProps) {
   const router = useRouter();
@@ -115,8 +117,8 @@ export function CancelDeliveryButton({
               Cancel delivery
             </h3>
             <p className="mt-2 text-sm text-text-secondary">
-              This notifies Uber Direct and stops the courier if they have not completed
-              dropoff yet.
+              This notifies {DELIVERY_PROVIDER_LABELS[providerId]} and stops the courier if
+              they have not completed dropoff yet.
             </p>
 
             <div className="mt-4 space-y-4">
@@ -133,8 +135,8 @@ export function CancelDeliveryButton({
                   className="flex h-12 w-full rounded-md border border-border-strong bg-background px-4 text-base text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   {CANCEL_REASONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+                    <option key={option} value={option}>
+                      {getCancelReasonLabel(option)}
                     </option>
                   ))}
                 </select>

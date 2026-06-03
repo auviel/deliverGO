@@ -8,7 +8,8 @@ import type {
 } from "@/lib/domain/delivery/types";
 import { createQuoteSchema } from "@/lib/domain/delivery/validation";
 import { storeProfileToAddress } from "@/lib/domain/store/format";
-import { getEnabledDeliveryProviders } from "@/lib/integrations/delivery/provider.registry";
+import { getDoorDashExternalStoreId } from "@/lib/domain/store/delivery-settings";
+import { getEnabledDeliveryProvidersForStore } from "@/lib/integrations/delivery/provider.registry";
 import type { ProviderQuoteRequest } from "@/lib/integrations/delivery/types";
 import type { GeocodedAddress } from "@/lib/integrations/geocoding/types";
 import { geocodeAddress } from "@/lib/services/geocoding/geocode-address";
@@ -47,7 +48,7 @@ function buildQuoteRequest(
       name: dropoffName,
       phone: dropoffPhone,
     },
-    externalStoreId: store.id,
+    externalStoreId: getDoorDashExternalStoreId(store),
   };
 }
 
@@ -72,7 +73,7 @@ export async function createQuote(input: unknown): Promise<CreateQuoteResult> {
     storeId: store.id,
   });
 
-  const providers = getEnabledDeliveryProviders();
+  const providers = getEnabledDeliveryProvidersForStore(store);
   if (providers.length === 0) {
     throw new AppError(
       "PROVIDER_ERROR",

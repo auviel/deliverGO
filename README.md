@@ -1,6 +1,8 @@
 # deliverGO
 
-Store manager dashboard for dispatching **Uber Direct** deliveries in Canada.
+Store manager dashboard for dispatching **Uber Direct** and **DoorDash Drive** deliveries in Canada.
+
+Compare carrier quotes side-by-side, pick the best fee, and track deliveries from one dashboard.
 
 ## Docs
 
@@ -16,6 +18,7 @@ Store manager dashboard for dispatching **Uber Direct** deliveries in Canada.
 - **PostgreSQL** + Prisma
 - **Tailwind CSS v4** (Uber-inspired design tokens)
 - **Uber Direct API** (sandbox + robo courier)
+- **DoorDash Drive API** (sandbox — no real Dasher dispatched)
 
 ## Prerequisites
 
@@ -38,7 +41,7 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and add your Uber sandbox credentials and Mapbox token when ready.
+Edit `.env` and add your Uber sandbox credentials, optional DoorDash credentials, and Mapbox token when ready.
 
 Get a Mapbox access token from [mapbox.com](https://account.mapbox.com/access-tokens/) (used for Canadian address geocoding).
 
@@ -78,6 +81,17 @@ npm run db:seed
 | Email | `store.manager@delivergo.local` |
 | Password | `DeliverGODev2026!` |
 | Store | Demo Market — 280 Lester St #102, Waterloo, ON |
+| Store id | `seed-store-waterloo` (used as DoorDash `external_store_id` unless overridden) |
+
+After seeding, register the store with DoorDash:
+
+```bash
+npm run doordash:register-store
+```
+
+This reads your deliverGO store from the database and calls the DoorDash Business & Store API (`POST /developer/v1/businesses/{id}/stores`). Re-run anytime to refresh name, phone, or address. Pass a different store id as an optional argument.
+
+See [DoorDash setup](#doordash-drive-setup) below.
 
 ### 5. Run the app
 
@@ -115,7 +129,7 @@ lib/
   domain/      → Types, validation, pure logic
   services/    → Use cases
   db/          → Prisma client + repositories
-  integrations/→ Uber, Mapbox, future carriers
+  integrations/→ Uber, DoorDash, Mapbox
 prisma/        → Schema + migrations + seed
 ```
 
@@ -173,6 +187,9 @@ Use this before going live:
 | `NEXT_PUBLIC_APP_URL` | `https://your-app.vercel.app` |
 | `UBER_*` | Sandbox creds first; switch to live when ready |
 | `UBER_LIVE_MODE` | `false` until production pilot |
+| `DOORDASH_*` | Optional — enables DoorDash quoting when set |
+| `DOORDASH_LIVE_MODE` | `false` until DoorDash production access |
+| `DOORDASH_WEBHOOK_AUTHORIZATION` | From DoorDash webhook settings |
 | `MAPBOX_ACCESS_TOKEN` | Required for geocoding |
 | `UBER_WEBHOOK_SIGNING_SECRET` | From Uber dashboard webhook settings |
 
@@ -187,7 +204,7 @@ DATABASE_URL="your-neon-url" npm run db:seed
 
 ## API routes
 
-All dashboard API routes require an authenticated session except `/api/webhooks/uber` (signature verified) and `/api/health`.
+All dashboard API routes require an authenticated session except webhook routes (verified separately) and `/api/health`.
 
 | Route | Method | Auth |
 |-------|--------|------|
@@ -197,6 +214,7 @@ All dashboard API routes require an authenticated session except `/api/webhooks/
 | `/api/deliveries/[id]` | GET | Session |
 | `/api/deliveries/[id]/cancel` | POST | Session |
 | `/api/webhooks/uber` | POST | HMAC signature |
+| `/api/webhooks/doordash` | POST | Authorization header |
 | `/api/me` | GET | Session |
 | `/api/health` | GET | Public |
 
@@ -246,6 +264,123 @@ cloudflared tunnel --url http://localhost:3000
 Use the generated `*.trycloudflare.com` URL the same way.
 
 > Tip: create a delivery in sandbox with robo courier enabled — status webhooks should arrive within seconds and advance the detail page timeline without manual refresh.
+
+## DoorDash Drive setup
+
+deliverGO can quote **Uber Direct** and **DoorDash Drive** in parallel on the new delivery page. The cheapest quote is marked **Recommended**; the store manager picks a carrier before sending.
+
+### 1. Developer account
+
+1. Sign up at [DoorDash Developer Portal](https://developer.doordash.com)
+2. Select **Drive: Request on-demand deliveries** (not Logistics or Marketplace Retail)
+3. Create **sandbox credentials** (Developer ID, Key ID, Signing Secret)
+4. Set `DOORDASH_EXTERNAL_BUSINESS_ID` — your merchant identifier (e.g. `default` or `delivergo-main`). See [Businesses and stores](https://developer.doordash.com/en-US/docs/drive/reference/businesses_and_stores/)
+
+### 2. Environment variables
+
+```env
+DOORDASH_DEVELOPER_ID=""
+DOORDASH_KEY_ID=""
+DOORDASH_SIGNING_SECRET=""
+DOORDASH_EXTERNAL_BUSINESS_ID="default"
+DOORDASH_API_BASE="https://openapi.doordash.com"
+DOORDASH_LIVE_MODE="false"
+DOORDASH_WEBHOOK_AUTHORIZATION="Bearer your-generated-token"
+```
+
+When any DoorDash variable is missing, deliverGO quotes **Uber only**.
+
+### 3. Store ↔ DoorDash mapping
+
+DoorDash identifies pickup locations with two IDs:
+
+| DoorDash field | deliverGO source |
+|----------------|------------------|
+| `external_business_id` | `DOORDASH_EXTERNAL_BUSINESS_ID` in `.env` |
+| `external_store_id` | Store profile → **DoorDash external store ID**, or **`Store.id`** if blank |
+
+**Seed store id:** `seed-store-waterloo`
+
+Register it automatically with **`external_store_id` = `Store.id`** (Option B):
+
+```bash
+npm run doordash:register-store
+```
+
+Uses `seed-store-waterloo` by default. Pass another store id as an argument. Re-run anytime to refresh name, phone, or address. If you previously set a DoorDash override to `default`, this script clears it so quotes use `Store.id`.
+
+Or register manually in the DoorDash portal:
+
+- `external_business_id` = your `DOORDASH_EXTERNAL_BUSINESS_ID`
+- `external_store_id` = `seed-store-waterloo` (or override under **Store profile → Delivery carriers**)
+
+Pickup address and phone should match your deliverGO store profile.
+
+### 4. Canada sandbox
+
+DoorDash Drive supports Canada, but **non-US sandbox** often requires a support request:
+
+1. [Get support](https://developer.doordash.com/en-US/docs/marketplace/how_to/request_support/) → category **Drive**
+2. Ask to enable **Canada sandbox** for your developer account
+
+Until enabled, DoorDash quotes may fail while Uber still works.
+
+### 5. Per-store carrier toggles
+
+**Store profile → Delivery carriers**
+
+- Enable/disable Uber Direct and DoorDash Drive per store
+- Override DoorDash `external_store_id` when it differs from `Store.id`
+
+### 6. DoorDash webhooks
+
+**Production (Vercel)**
+
+1. Developer Portal → **Webhooks** → Create endpoint
+2. URL:
+
+```
+https://your-app.vercel.app/api/webhooks/doordash
+```
+
+3. Events: **All events** (or delivery lifecycle events)
+4. Authentication: generate an **Authorization** token (≥ 16 chars)
+5. Set the same value in Vercel as `DOORDASH_WEBHOOK_AUTHORIZATION` (with or without `Bearer ` prefix — deliverGO accepts both)
+6. Redeploy
+
+**Local development**
+
+Use ngrok or Cloudflare Tunnel the same way as Uber:
+
+```
+https://YOUR-SUBDOMAIN.ngrok-free.app/api/webhooks/doordash
+```
+
+### DoorDash sandbox checklist
+
+Manual validation (Phase 14.7):
+
+- [ ] DoorDash credentials + `DOORDASH_EXTERNAL_BUSINESS_ID` configured
+- [ ] Store registered in DoorDash with matching `external_store_id`
+- [ ] Canada sandbox enabled (if testing Canadian addresses)
+- [ ] `POST /api/deliveries/quote` returns DoorDash fee alongside Uber (or DoorDash-only if Uber disabled)
+- [ ] Accept quote → delivery has `tracking_url`
+- [ ] Webhook advances status on delivery detail page
+- [ ] Cancel before Dasher pickup works
+- [ ] Completed delivery shows photo/signature when configured
+- [ ] Webhook URL + `DOORDASH_WEBHOOK_AUTHORIZATION` set on production
+
+### Going to production (DoorDash)
+
+DoorDash Drive **production access is gated** — demo + review required.
+
+1. Complete integration against sandbox
+2. Request production access in the Developer Portal
+3. Set `DOORDASH_LIVE_MODE=true` and production credentials
+4. Register production webhook URL
+5. Pilot one store before wider rollout
+
+See [Drive FAQs](https://developer.doordash.com/en-US/docs/drive/overview/faqs) and [Manage credentials](https://developer.doordash.com/en-US/docs/drive/how_to/manage_credentials).
 
 ## License
 
