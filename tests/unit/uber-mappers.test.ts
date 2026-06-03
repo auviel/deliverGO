@@ -1,6 +1,47 @@
 import { describe, expect, it } from "vitest";
-import { formatUberAddressJson, mapUberDeliveryStatus } from "@/lib/integrations/delivery/uber/mappers";
+import { createDefaultManifest } from "@/lib/domain/delivery/manifest";
+import {
+  buildCreateDeliveryBody,
+  formatUberAddressJson,
+  mapUberDeliveryStatus,
+} from "@/lib/integrations/delivery/uber/mappers";
+import type { ProviderCreateDeliveryRequest } from "@/lib/integrations/delivery/types";
 import { normalizeCanadianPhone } from "@/lib/utils/phone";
+
+const mockCreateInput: ProviderCreateDeliveryRequest = {
+  quoteId: "quote_123",
+  externalId: "DG-test",
+  pickup: {
+    name: "Demo Market",
+    phone: "+15195550199",
+    address: {
+      line1: "280 Lester St",
+      city: "Waterloo",
+      province: "ON",
+      postalCode: "N2L 0G2",
+      country: "CA",
+      latitude: 43.478885,
+      longitude: -80.524498,
+      formatted: "280 Lester St, Waterloo, ON N2L 0G2, CA",
+    },
+  },
+  dropoff: {
+    name: "Jane Doe",
+    phone: "5195550100",
+    address: {
+      line1: "200 University Ave W",
+      city: "Waterloo",
+      province: "ON",
+      postalCode: "N2L 3G1",
+      country: "CA",
+      latitude: 43.4723,
+      longitude: -80.5449,
+      formatted: "200 University Ave W, Waterloo, ON N2L 3G1, CA",
+    },
+  },
+  proofOfDelivery: { signature: false, picture: true },
+  liveMode: false,
+};
 
 describe("normalizeCanadianPhone", () => {
   it("normalizes 10-digit numbers to E.164", () => {
@@ -72,5 +113,29 @@ describe("mapUberDeliveryStatus", () => {
   it("maps webhook-style statuses", () => {
     expect(mapUberDeliveryStatus("EN_ROUTE_TO_PICKUP")).toBe("en_route_to_pickup");
     expect(mapUberDeliveryStatus("COMPLETED")).toBe("completed");
+  });
+});
+
+describe("buildCreateDeliveryBody", () => {
+  it("injects robo courier spec in sandbox mode", () => {
+    const body = buildCreateDeliveryBody(
+      mockCreateInput,
+      createDefaultManifest(),
+      false,
+    );
+
+    expect(body.test_specifications).toEqual({
+      robo_courier_specification: { mode: "auto" },
+    });
+  });
+
+  it("omits robo courier spec in live mode", () => {
+    const body = buildCreateDeliveryBody(
+      mockCreateInput,
+      createDefaultManifest(),
+      true,
+    );
+
+    expect(body.test_specifications).toBeUndefined();
   });
 });

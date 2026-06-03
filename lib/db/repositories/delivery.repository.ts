@@ -147,6 +147,12 @@ export const deliveryRepository = {
     });
   },
 
+  async findByProviderOrderId(providerOrderId: string): Promise<Delivery | null> {
+    return prisma.delivery.findFirst({
+      where: { providerOrderId },
+    });
+  },
+
   async create(data: CreateDeliveryData): Promise<Delivery> {
     return prisma.delivery.create({ data });
   },

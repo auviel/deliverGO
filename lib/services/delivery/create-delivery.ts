@@ -8,6 +8,7 @@ import {
   storeProfileToAddress,
 } from "@/lib/domain/store/format";
 import { getDeliveryProviderForStore } from "@/lib/integrations/delivery/provider.registry";
+import { isUberLiveMode } from "@/lib/config/environment";
 import type { ProviderDelivery } from "@/lib/integrations/delivery/types";
 import { geocodeAddress } from "@/lib/services/geocoding/geocode-address";
 import { AppError, isAppError } from "@/lib/utils/errors";
@@ -44,7 +45,7 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
   const provider = getDeliveryProviderForStore(store);
   const pickupAddress = storeProfileToAddress(store);
   const pickupFormatted = formatStoreProfileAddress(store);
-  const liveMode = process.env.UBER_LIVE_MODE === "true";
+  const liveMode = isUberLiveMode();
   const externalId = generateDeliveryExternalId();
 
   let quoteId = parsed.quoteId;

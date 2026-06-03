@@ -54,3 +54,12 @@ export const cancelDeliverySchema = z
 export type CreateDeliverySchema = z.infer<typeof createDeliverySchema>;
 export type CreateQuoteSchema = z.infer<typeof createQuoteSchema>;
 export type CancelDeliverySchema = z.infer<typeof cancelDeliverySchema>;
+
+export const listDeliveriesQuerySchema = z.object({
+  filter: z.string().optional(),
+  q: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+export type ListDeliveriesQuerySchema = z.infer<typeof listDeliveriesQuerySchema>;

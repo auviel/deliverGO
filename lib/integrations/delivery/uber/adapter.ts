@@ -8,6 +8,10 @@ import type {
   ProviderWebhookEvent,
 } from "../types";
 import { createUberDirectClient } from "./client";
+import {
+  parseUberStatusChangedWebhook,
+  UBER_STATUS_CHANGED_EVENT,
+} from "./webhook";
 
 function getClient() {
   return createUberDirectClient();
@@ -45,9 +49,25 @@ export const uberDirectAdapter: DeliveryProvider = {
   },
 
   async parseWebhook(
-    _raw: unknown,
-    _headers: Headers,
+    raw: unknown,
+    headers: Headers,
   ): Promise<ProviderWebhookEvent | null> {
-    throw new Error("Uber webhook parsing is not implemented yet (Phase 9).");
+    if (typeof raw !== "string") {
+      throw new Error("Uber webhook body must be a raw string for signature verification.");
+    }
+
+    const payload = parseUberStatusChangedWebhook(raw);
+
+    if (payload.event_type !== UBER_STATUS_CHANGED_EVENT) {
+      return null;
+    }
+
+    return {
+      eventId: payload.event_id,
+      providerOrderId: payload.meta.order_id ?? "",
+      status: payload.meta.status,
+      externalOrderId: payload.meta.external_order_id,
+      resourceHref: payload.resource_href,
+    };
   },
 };

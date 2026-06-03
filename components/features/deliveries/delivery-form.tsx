@@ -10,8 +10,13 @@ import {
 import { isQuoteValid, QuoteCard } from "@/components/features/deliveries/quote-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import {
+  validateDeliveryFormFields,
+  type DeliveryFormErrors,
+} from "@/lib/domain/delivery/form-validation";
 import {
   getMaxScheduledPickupAt,
   getMinScheduledPickupAt,
@@ -85,6 +90,7 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
   const [isGeocoding, setIsGeocoding] = useState(false);
 
   const [quote, setQuote] = useState<DeliveryQuote | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<DeliveryFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isQuoting, setIsQuoting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -158,8 +164,24 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
   const canQuote = dropoffReady && !isQuoting;
   const canSend = dropoffReady && isQuoteValid(quote) && !isSubmitting;
 
+  function runFieldValidation() {
+    const errors = validateDeliveryFormFields({
+      dropoffName,
+      dropoffPhone,
+      geocoded,
+      geocodeError,
+    });
+    setFieldErrors(errors);
+    return errors;
+  }
+
   async function handleGetQuote() {
     setFormError(null);
+    const errors = runFieldValidation();
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
+
     setIsQuoting(true);
 
     try {
@@ -189,6 +211,12 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const errors = runFieldValidation();
+    if (Object.keys(errors).length > 0) {
+      setFormError("Fix the highlighted fields before sending the delivery.");
+      return;
+    }
 
     if (!quote || !isQuoteValid(quote)) {
       setFormError("Request a valid quote before sending the delivery.");
@@ -235,7 +263,7 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-6">
+    <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-6" noValidate>
       <PickupSection store={store} />
 
       <Card>
@@ -246,55 +274,61 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="dropoffName" className="text-sm font-medium text-text-secondary">
-              Customer name
-            </label>
+          <FormField id="dropoffName" label="Customer name" error={fieldErrors.dropoffName}>
             <Input
-              id="dropoffName"
               name="dropoffName"
-              required
               value={dropoffName}
-              onChange={(event) => setDropoffName(event.target.value)}
+              onChange={(event) => {
+                setDropoffName(event.target.value);
+                if (fieldErrors.dropoffName) {
+                  setFieldErrors((current) => ({ ...current, dropoffName: undefined }));
+                }
+              }}
               placeholder="Jane Doe"
               autoComplete="name"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <label htmlFor="dropoffPhone" className="text-sm font-medium text-text-secondary">
-              Customer phone
-            </label>
+          <FormField
+            id="dropoffPhone"
+            label="Customer phone"
+            error={fieldErrors.dropoffPhone}
+            hint="Canadian number — 10 digits or +1 format."
+          >
             <Input
-              id="dropoffPhone"
               name="dropoffPhone"
               type="tel"
-              required
               value={dropoffPhone}
-              onChange={(event) => setDropoffPhone(event.target.value)}
+              onChange={(event) => {
+                setDropoffPhone(event.target.value);
+                if (fieldErrors.dropoffPhone) {
+                  setFieldErrors((current) => ({ ...current, dropoffPhone: undefined }));
+                }
+              }}
               placeholder="5195550100"
               autoComplete="tel"
             />
-            <p className="text-xs text-text-tertiary">Canadian number — 10 digits or +1 format.</p>
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <label htmlFor="dropoffAddress" className="text-sm font-medium text-text-secondary">
-              Dropoff address
-            </label>
+          <FormField
+            id="dropoffAddress"
+            label="Dropoff address"
+            error={fieldErrors.dropoffAddress}
+            hint="Enter a complete Canadian address. We verify it with Mapbox before quoting."
+          >
             <Input
-              id="dropoffAddress"
               name="dropoffAddress"
-              required
               value={dropoffAddress}
-              onChange={(event) => setDropoffAddress(event.target.value)}
+              onChange={(event) => {
+                setDropoffAddress(event.target.value);
+                if (fieldErrors.dropoffAddress) {
+                  setFieldErrors((current) => ({ ...current, dropoffAddress: undefined }));
+                }
+              }}
               placeholder="123 King St W, Kitchener, ON N2G 1A1"
               autoComplete="street-address"
             />
-            <p className="text-xs text-text-tertiary">
-              Enter a complete Canadian address. We verify it with Mapbox before quoting.
-            </p>
-          </div>
+          </FormField>
 
           <AddressPreview
             result={geocoded}
@@ -309,7 +343,11 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
           <h2 className="text-lg font-semibold text-foreground">Schedule</h2>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Pickup schedule"
+          >
             <Button
               type="button"
               variant={scheduleMode === "asap" ? "primary" : "secondary"}
@@ -327,24 +365,20 @@ export function DeliveryForm({ store }: DeliveryFormProps) {
           </div>
 
           {scheduleMode === "scheduled" ? (
-            <div className="space-y-2">
-              <label htmlFor="scheduledAt" className="text-sm font-medium text-text-secondary">
-                Pickup ready time
-              </label>
+            <FormField
+              id="scheduledAt"
+              label="Pickup ready time"
+              hint="Must be at least 15 minutes from now and within 30 days."
+            >
               <Input
-                id="scheduledAt"
                 name="scheduledAt"
                 type="datetime-local"
-                required
                 min={scheduleBounds.min}
                 max={scheduleBounds.max}
                 value={scheduledAt}
                 onChange={(event) => setScheduledAt(event.target.value)}
               />
-              <p className="text-xs text-text-tertiary">
-                Must be at least 15 minutes from now and within 30 days.
-              </p>
-            </div>
+            </FormField>
           ) : (
             <p className="text-sm text-text-secondary">
               Courier dispatched as soon as possible after you send the delivery.

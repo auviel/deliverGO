@@ -1,8 +1,9 @@
 import { requireStoreManager } from "@/lib/auth/session";
+import { geocodeRequestSchema } from "@/lib/domain/address/validation";
 import { geocodeAddress } from "@/lib/services/geocoding/geocode-address";
+import { parseJsonBody } from "@/lib/utils/api-request";
 import { handleApiError, AppError } from "@/lib/utils/errors";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
-import { geocodeRequestSchema } from "@/lib/domain/address/validation";
 
 const GEOCODE_RATE_LIMIT = 30;
 const GEOCODE_RATE_WINDOW_MS = 60_000;
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = geocodeRequestSchema.parse(await request.json());
+    const body = await parseJsonBody(request, geocodeRequestSchema);
     const result = await geocodeAddress({
       query: body.query,
       storeId: user.storeId,

@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+
 export type AppErrorCode =
   | "QUOTE_EXPIRED"
   | "INVALID_ADDRESS"
@@ -12,6 +14,7 @@ export class AppError extends Error {
     public code: AppErrorCode,
     message: string,
     public status = 400,
+    public details?: unknown,
   ) {
     super(message);
     this.name = "AppError";
@@ -23,9 +26,24 @@ export function isAppError(error: unknown): error is AppError {
 }
 
 export function handleApiError(error: unknown): Response {
+  if (error instanceof ZodError) {
+    return Response.json(
+      {
+        error: "Validation failed",
+        code: "VALIDATION_ERROR",
+        details: error.flatten().fieldErrors,
+      },
+      { status: 400 },
+    );
+  }
+
   if (isAppError(error)) {
     return Response.json(
-      { error: error.message, code: error.code },
+      {
+        error: error.message,
+        code: error.code,
+        ...(error.details !== undefined ? { details: error.details } : {}),
+      },
       { status: error.status },
     );
   }

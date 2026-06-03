@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth/index";
 import { SandboxBadge } from "@/components/layout/sandbox-badge";
+import { isUberLiveMode } from "@/lib/config/environment";
 
 export async function TopBar() {
   const session = await auth();
-  const isLive = process.env.UBER_LIVE_MODE === "true";
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -22,7 +22,7 @@ export async function TopBar() {
         </div>
 
         <div className="flex items-center gap-3">
-          {!isLive ? <SandboxBadge /> : null}
+          {!isUberLiveMode() ? <SandboxBadge /> : null}
           <div className="hidden text-right sm:block md:hidden">
             <p className="truncate text-sm font-medium text-foreground">
               {session?.user?.storeName ?? "Store"}

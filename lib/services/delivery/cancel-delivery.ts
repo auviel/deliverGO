@@ -56,10 +56,15 @@ export async function cancelDelivery(
     cancelledBy: user.id,
   });
 
-  logger.info("delivery.cancelled", {
+  logger.info("delivery.cancelled.audit", {
     deliveryId: id,
+    externalId: delivery.externalId,
     storeId: user.storeId,
+    cancelledBy: user.id,
+    cancelledByEmail: user.email,
     reason: parsed.reason,
+    details: parsed.details ?? null,
+    timestamp: new Date().toISOString(),
   });
 
   return mapDeliveryToDetail(updated);

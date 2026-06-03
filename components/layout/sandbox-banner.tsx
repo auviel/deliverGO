@@ -1,7 +1,7 @@
-export function SandboxBanner() {
-  const isLive = process.env.UBER_LIVE_MODE === "true";
+import { isUberLiveMode } from "@/lib/config/environment";
 
-  if (isLive) {
+export function SandboxBanner() {
+  if (isUberLiveMode()) {
     return null;
   }
 

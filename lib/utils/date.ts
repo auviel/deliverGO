@@ -1,11 +1,22 @@
-const DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "America/Toronto",
-});
+import { getStoreTimeZone } from "@/lib/config/environment";
+
+function createDateFormatter() {
+  return new Intl.DateTimeFormat("en-CA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: getStoreTimeZone(),
+  });
+}
+
+let cachedFormatter: Intl.DateTimeFormat | undefined;
+
+function getDateFormatter(): Intl.DateTimeFormat {
+  cachedFormatter ??= createDateFormatter();
+  return cachedFormatter;
+}
 
 export function formatDateTime(date: Date): string {
-  return DATE_FORMATTER.format(date);
+  return getDateFormatter().format(date);
 }
 
 export function truncateText(text: string, maxLength: number): string {

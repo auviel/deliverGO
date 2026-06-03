@@ -58,7 +58,11 @@ export function DeliveryListFilters({ filter, search }: DeliveryListFiltersProps
 
   return (
     <div className="mb-6 space-y-4">
-      <div className="flex flex-wrap gap-2 border-b border-border">
+      <div
+        className="flex flex-wrap gap-2 border-b border-border"
+        role="tablist"
+        aria-label="Filter deliveries"
+      >
         {DELIVERY_LIST_FILTERS.map((item) => {
           const isActive = filter === item.value;
 
@@ -66,12 +70,14 @@ export function DeliveryListFilters({ filter, search }: DeliveryListFiltersProps
             <Link
               key={item.value}
               href={buildHref(item.value)}
+              role="tab"
               className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-fast",
+                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
                 isActive
                   ? "border-foreground text-foreground"
                   : "border-transparent text-text-secondary hover:text-foreground",
               )}
+              aria-selected={isActive}
               aria-current={isActive ? "page" : undefined}
             >
               {item.label}
@@ -93,7 +99,7 @@ export function DeliveryListFilters({ filter, search }: DeliveryListFiltersProps
         </div>
         <button
           type="submit"
-          className="inline-flex h-12 items-center justify-center rounded-md border border-border bg-surface-elevated px-4 text-sm font-medium text-foreground transition-colors duration-fast hover:bg-surface"
+          className="inline-flex h-12 items-center justify-center rounded-md border border-border bg-surface-elevated px-4 text-sm font-medium text-foreground transition-colors duration-fast hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
           Search
         </button>

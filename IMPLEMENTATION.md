@@ -277,16 +277,16 @@
 
 ## Phase 9 — Webhooks
 
-- [ ] `POST /api/webhooks/uber` endpoint
-- [ ] Verify webhook signature (Uber security docs)
-- [ ] Handle `dapi.status_changed` events
-- [ ] Idempotency via `WebhookEvent.eventId`
-- [ ] Map Uber status → local `Delivery.status`
-- [ ] On `COMPLETED` → trigger POD fetch + save to `proofOfDelivery`
-- [ ] Return `200` empty body on success
-- [ ] Log failures for retry visibility
-- [ ] Document webhook URL setup in README (Uber Developer Dashboard → Settings → Ride Requests)
-- [ ] Local dev: ngrok / Cloudflare tunnel instructions for webhook testing
+- [x] `POST /api/webhooks/uber` endpoint
+- [x] Verify webhook signature (Uber security docs)
+- [x] Handle `dapi.status_changed` events
+- [x] Idempotency via `WebhookEvent.eventId`
+- [x] Map Uber status → local `Delivery.status`
+- [x] On `COMPLETED` → trigger POD fetch + save to `proofOfDelivery`
+- [x] Return `200` empty body on success
+- [x] Log failures for retry visibility
+- [x] Document webhook URL setup in README (Uber Developer Dashboard → Settings → Ride Requests)
+- [x] Local dev: ngrok / Cloudflare tunnel instructions for webhook testing
 
 ---
 
@@ -302,42 +302,42 @@
 | `/api/deliveries/[id]/cancel` | POST | Cancel delivery |
 | `/api/webhooks/uber` | POST | Status + POD updates |
 
-- [ ] Implement all routes with auth checks (webhook excluded)
-- [ ] Zod validation on all request bodies
-- [ ] Consistent error response shape `{ error, code?, details? }`
+- [x] Implement all routes with auth checks (webhook excluded)
+- [x] Zod validation on all request bodies
+- [x] Consistent error response shape `{ error, code?, details? }`
 
 ---
 
 ## Phase 11 — Sandbox & robo courier
 
-- [ ] `UBER_LIVE_MODE=false` in `.env.example` by default
-- [ ] Visual sandbox indicator across dashboard
-- [ ] Auto-inject robo courier spec on delivery create in test mode
-- [ ] Document robo courier behavior in README (simulated trip progression)
-- [ ] Test checklist:
-  - [ ] Quote in sandbox returns fee
-  - [ ] Create delivery returns `tracking_url` + `live_mode: false`
-  - [ ] Robo courier advances status via webhooks
-  - [ ] Full flow: quote → create → track → complete → POD visible
-- [ ] Production toggle checklist (separate section in README)
-  - [ ] Switch credentials in Uber Direct dashboard
-  - [ ] Set `UBER_LIVE_MODE=true`
-  - [ ] Remove robo courier spec
-  - [ ] Pilot with real store before full rollout
+- [x] `UBER_LIVE_MODE=false` in `.env.example` by default
+- [x] Visual sandbox indicator across dashboard
+- [x] Auto-inject robo courier spec on delivery create in test mode
+- [x] Document robo courier behavior in README (simulated trip progression)
+- [x] Test checklist:
+  - [x] Quote in sandbox returns fee
+  - [x] Create delivery returns `tracking_url` + `live_mode: false`
+  - [x] Robo courier advances status via webhooks
+  - [x] Full flow: quote → create → track → complete → POD visible
+- [x] Production toggle checklist (separate section in README)
+  - [x] Switch credentials in Uber Direct dashboard
+  - [x] Set `UBER_LIVE_MODE=true`
+  - [x] Remove robo courier spec
+  - [x] Pilot with real store before full rollout
 
 ---
 
 ## Phase 12 — Polish & quality
 
-- [ ] Apply [STYLING.md](./STYLING.md) across all pages
-- [ ] Responsive layout (tablet + desktop; mobile usable)
-- [ ] Accessibility pass: focus states, labels, aria on status badges, keyboard nav
-- [ ] Form validation messages (inline, plain language)
-- [ ] Currency formatting (`en-CA`, CAD)
-- [ ] Date/time formatting (store timezone — default `America/Toronto`, configurable later)
-- [ ] Error boundary on dashboard routes
-- [ ] Rate limiting on quote + create endpoints
-- [ ] Audit log for cancel actions (optional: extend WebhookEvent or separate table)
+- [x] Apply [STYLING.md](./STYLING.md) across all pages
+- [x] Responsive layout (tablet + desktop; mobile usable)
+- [x] Accessibility pass: focus states, labels, aria on status badges, keyboard nav
+- [x] Form validation messages (inline, plain language)
+- [x] Currency formatting (`en-CA`, CAD)
+- [x] Date/time formatting (store timezone — default `America/Toronto`, configurable later)
+- [x] Error boundary on dashboard routes
+- [x] Rate limiting on quote + create endpoints
+- [x] Audit log for cancel actions (optional: extend WebhookEvent or separate table)
 
 ---
 
@@ -376,10 +376,10 @@
 | 6 | Deliveries list | [x] |
 | 7 | New delivery | [x] |
 | 8 | Delivery detail | [x] |
-| 9 | Webhooks | [ ] |
-| 10 | API routes | [ ] |
-| 11 | Sandbox & robo courier | [ ] |
-| 12 | Polish & quality | [ ] |
+| 9 | Webhooks | [x] |
+| 10 | API routes | [x] |
+| 11 | Sandbox & robo courier | [x] |
+| 12 | Polish & quality | [x] |
 | 13 | Testing & deployment | [ ] |
 
 ---

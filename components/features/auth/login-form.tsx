@@ -1,7 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { validateLoginFields } from "@/lib/domain/delivery/form-validation";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -13,12 +15,22 @@ export function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"email" | "password", string>>>(
+    {},
+  );
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    const validation = validateLoginFields({ email, password });
+    setFieldErrors(validation);
+    if (Object.keys(validation).length > 0) {
+      return;
+    }
+
     setIsLoading(true);
 
     const result = await signIn("credentials", {
@@ -30,7 +42,7 @@ export function LoginForm() {
     setIsLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password.");
+      setError("Invalid email or password. Check your credentials and try again.");
       return;
     }
 
@@ -39,37 +51,37 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label htmlFor="email" className="text-sm font-medium text-text-secondary">
-          Email
-        </label>
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      <FormField id="email" label="Email" error={fieldErrors.email}>
         <Input
-          id="email"
           name="email"
           type="email"
           autoComplete="email"
-          required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (fieldErrors.email) {
+              setFieldErrors((current) => ({ ...current, email: undefined }));
+            }
+          }}
           placeholder="store.manager@delivergo.local"
         />
-      </div>
+      </FormField>
 
-      <div className="space-y-2">
-        <label htmlFor="password" className="text-sm font-medium text-text-secondary">
-          Password
-        </label>
+      <FormField id="password" label="Password" error={fieldErrors.password}>
         <Input
-          id="password"
           name="password"
           type="password"
           autoComplete="current-password"
-          required
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            if (fieldErrors.password) {
+              setFieldErrors((current) => ({ ...current, password: undefined }));
+            }
+          }}
         />
-      </div>
+      </FormField>
 
       {error ? (
         <p className="text-sm text-error" role="alert">

@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { Package, Plus } from "lucide-react";
 import { auth } from "@/lib/auth/index";
 import { LogoutButton } from "@/components/features/auth/logout-button";
+import { SandboxBadge } from "@/components/layout/sandbox-badge";
 import { SidebarNavLink } from "@/components/layout/sidebar-nav-link";
+import { isUberLiveMode } from "@/lib/config/environment";
 
 export async function Sidebar() {
   const session = await auth();
@@ -10,7 +11,10 @@ export async function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 border-r border-border bg-surface md:flex md:flex-col">
       <div className="border-b border-border px-5 py-6">
-        <span className="text-lg font-semibold tracking-tight">deliverGO</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-lg font-semibold tracking-tight">deliverGO</span>
+          {!isUberLiveMode() ? <SandboxBadge /> : null}
+        </div>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-3">
