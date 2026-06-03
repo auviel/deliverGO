@@ -1,5 +1,5 @@
 // deliverGO — Prisma schema
-// Models are added in Phase 1. See IMPLEMENTATION.md
+// See IMPLEMENTATION.md Phase 1 and ARCHITECTURE.md
 
 generator client {
   provider = "prisma-client-js"
@@ -8,4 +8,111 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STORE_MANAGER
+}
+
+enum DeliveryStatus {
+  draft
+  pending
+  scheduled
+  en_route_to_pickup
+  arrived_at_pickup
+  en_route_to_dropoff
+  arrived_at_dropoff
+  completed
+  cancelled
+  failed
+}
+
+model Store {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  province     String
+  postalCode   String
+  country      String   @default("CA")
+  latitude     Float
+  longitude    Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users      User[]
+  deliveries Delivery[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(STORE_MANAGER)
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+model Delivery {
+  id                 String         @id @default(cuid())
+  externalId         String         @unique
+  storeId            String
+  store              Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  providerId         String         @default("uber_direct")
+  providerDeliveryId String?
+  providerOrderId    String?
+  quoteId            String?
+  orderId            String?
+  providerPayload    Json?
+  pickupName         String
+  pickupPhone        String
+  pickupAddress      String
+  pickupLat          Float
+  pickupLng          Float
+  dropoffName        String
+  dropoffPhone       String
+  dropoffAddress     String
+  dropoffLat         Float
+  dropoffLng         Float
+  feeCents           Int?
+  currency           String         @default("CAD")
+  status             DeliveryStatus @default(draft)
+  trackingUrl        String?
+  pickupReadyAt      DateTime?
+  scheduledFor       DateTime?
+  podSignature       Boolean        @default(false)
+  podPicture         Boolean        @default(true)
+  proofOfDelivery    Json?
+  cancelledAt        DateTime?
+  cancelReason       String?
+  cancelledBy        String?
+  liveMode           Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  webhookEvents WebhookEvent[]
+
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([providerDeliveryId])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  eventId     String    @unique
+  eventType   String
+  payload     Json
+  processedAt DateTime?
+  deliveryId  String?
+  delivery    Delivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([deliveryId])
 }

@@ -1,13 +1,22 @@
 import { z } from "zod";
+import { normalizeCanadianPhone } from "@/lib/utils/phone";
 
 export const proofOfDeliveryConfigSchema = z.object({
   signature: z.boolean(),
   picture: z.boolean(),
 });
 
+const canadianPhoneSchema = z
+  .string()
+  .min(10, "Valid phone number is required")
+  .refine((value) => normalizeCanadianPhone(value) !== null, {
+    message: "Enter a valid Canadian phone number",
+  });
+
 export const createDeliverySchema = z.object({
+  quoteId: z.string().min(1, "A valid quote is required"),
   dropoffName: z.string().min(1, "Customer name is required"),
-  dropoffPhone: z.string().min(10, "Valid phone number is required"),
+  dropoffPhone: canadianPhoneSchema,
   dropoffAddress: z.string().min(5, "Dropoff address is required"),
   scheduledPickupAt: z.coerce.date().optional(),
   proofOfDelivery: proofOfDeliveryConfigSchema.default({

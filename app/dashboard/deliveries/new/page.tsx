@@ -1,11 +1,14 @@
 import { PageHeader } from "../../layout";
-import { DeliveryFormPlaceholder } from "@/components/features/deliveries/delivery-form";
+import { DeliveryForm } from "@/components/features/deliveries/delivery-form";
+import { requireSessionContext } from "@/lib/auth/session";
 
-export default function NewDeliveryPage() {
+export default async function NewDeliveryPage() {
+  const { store } = await requireSessionContext();
+
   return (
     <>
       <PageHeader title="New delivery" />
-      <DeliveryFormPlaceholder />
+      <DeliveryForm store={store} />
     </>
   );
 }

@@ -68,98 +68,98 @@
 
 ### Schema
 
-- [ ] **Store** model
-  - [ ] `id`, `name`, `phone`, `addressLine1`, `addressLine2`, `city`, `province`, `postalCode`, `country` (default `CA`)
-  - [ ] `latitude`, `longitude`
-  - [ ] `createdAt`, `updatedAt`
-- [ ] **User** model
-  - [ ] `id`, `email`, `passwordHash`, `name`, `role` (enum: `STORE_MANAGER`)
-  - [ ] `storeId` → Store
-  - [ ] `createdAt`, `updatedAt`
-- [ ] **Delivery** model (provider-agnostic naming — see [ARCHITECTURE.md](./ARCHITECTURE.md))
-  - [ ] `id`, `externalId` (our reference, sent to provider as `external_id`)
-  - [ ] `storeId` → Store
-  - [ ] `providerId` (default `uber_direct`), `providerDeliveryId`, `providerOrderId`, `quoteId`
-  - [ ] `orderId` nullable (future ecommerce FK)
-  - [ ] `providerPayload` JSON (raw provider snapshot)
-  - [ ] Pickup snapshot: `pickupName`, `pickupPhone`, `pickupAddress`, `pickupLat`, `pickupLng`
-  - [ ] Dropoff: `dropoffName`, `dropoffPhone`, `dropoffAddress`, `dropoffLat`, `dropoffLng`
-  - [ ] `feeCents`, `currency`, `status` (local enum mirroring Uber lifecycle)
-  - [ ] `trackingUrl`, `pickupReadyAt`, `scheduledFor` (nullable)
-  - [ ] POD flags: `podSignature`, `podPicture` (booleans)
-  - [ ] POD results (JSON): `proofOfDelivery` (signature URL, picture URL, signer name, fetched_at)
-  - [ ] `cancelledAt`, `cancelReason`, `cancelledBy`
-  - [ ] `liveMode` (boolean — sandbox vs production)
-  - [ ] `createdAt`, `updatedAt`
-- [ ] **WebhookEvent** model (idempotency + audit)
-  - [ ] `eventId` (unique), `eventType`, `payload`, `processedAt`, `deliveryId`
+- [x] **Store** model
+  - [x] `id`, `name`, `phone`, `addressLine1`, `addressLine2`, `city`, `province`, `postalCode`, `country` (default `CA`)
+  - [x] `latitude`, `longitude`
+  - [x] `createdAt`, `updatedAt`
+- [x] **User** model
+  - [x] `id`, `email`, `passwordHash`, `name`, `role` (enum: `STORE_MANAGER`)
+  - [x] `storeId` → Store
+  - [x] `createdAt`, `updatedAt`
+- [x] **Delivery** model (provider-agnostic naming — see [ARCHITECTURE.md](./ARCHITECTURE.md))
+  - [x] `id`, `externalId` (our reference, sent to provider as `external_id`)
+  - [x] `storeId` → Store
+  - [x] `providerId` (default `uber_direct`), `providerDeliveryId`, `providerOrderId`, `quoteId`
+  - [x] `orderId` nullable (future ecommerce FK)
+  - [x] `providerPayload` JSON (raw provider snapshot)
+  - [x] Pickup snapshot: `pickupName`, `pickupPhone`, `pickupAddress`, `pickupLat`, `pickupLng`
+  - [x] Dropoff: `dropoffName`, `dropoffPhone`, `dropoffAddress`, `dropoffLat`, `dropoffLng`
+  - [x] `feeCents`, `currency`, `status` (local enum mirroring Uber lifecycle)
+  - [x] `trackingUrl`, `pickupReadyAt`, `scheduledFor` (nullable)
+  - [x] POD flags: `podSignature`, `podPicture` (booleans)
+  - [x] POD results (JSON): `proofOfDelivery` (signature URL, picture URL, signer name, fetched_at)
+  - [x] `cancelledAt`, `cancelReason`, `cancelledBy`
+  - [x] `liveMode` (boolean — sandbox vs production)
+  - [x] `createdAt`, `updatedAt`
+- [x] **WebhookEvent** model (idempotency + audit)
+  - [x] `eventId` (unique), `eventType`, `payload`, `processedAt`, `deliveryId`
 
 ### Migrations & seed
 
-- [ ] Run initial migration
-- [ ] Seed script: one Canadian store (Toronto or user-provided address)
-- [ ] Seed script: one store manager user (`store.manager@delivergo.local` / dev password in README only)
-- [ ] Verify seed via Prisma Studio or SQL query
+- [x] Run initial migration
+- [x] Seed script: one Canadian store (Toronto or user-provided address)
+- [x] Seed script: one store manager user (`store.manager@delivergo.local` / dev password in README only)
+- [x] Verify seed via Prisma Studio or SQL query
 
 ---
 
 ## Phase 2 — Authentication
 
-- [ ] Install and configure Auth.js with credentials provider
-- [ ] Password hashing (bcrypt)
-- [ ] Login page (`/login`) — email + password, minimal Uber-style layout
-- [ ] Session middleware — protect `/dashboard/*` routes
-- [ ] Logout action
-- [ ] Redirect unauthenticated users to `/login`
-- [ ] Load store profile into session or server context after login
-- [ ] Add `GET /api/me` (optional) for client session + store info
+- [x] Install and configure Auth.js with credentials provider
+- [x] Password hashing (bcrypt)
+- [x] Login page (`/login`) — email + password, minimal Uber-style layout
+- [x] Session middleware — protect `/dashboard/*` routes
+- [x] Logout action
+- [x] Redirect unauthenticated users to `/login`
+- [x] Load store profile into session or server context after login
+- [x] Add `GET /api/me` (optional) for client session + store info
 
 ---
 
 ## Phase 3 — Uber Direct client (server-only)
 
-- [ ] Implement under `lib/integrations/delivery/uber/` (implements `DeliveryProvider` — see [ARCHITECTURE.md](./ARCHITECTURE.md))
-- [ ] `client.ts` — OAuth client credentials, scope `eats.deliveries`, token cache with expiry refresh
-- [ ] `adapter.ts` — maps domain ↔ Uber API
-  - [ ] `createQuote(pickup, dropoff, pickupReady?)`
-  - [ ] `createDelivery(payload)` — includes `quote_id`, manifest, lat/lng, optional schedule
-  - [ ] `getDelivery(uberDeliveryId)`
-  - [ ] `listDeliveries(filters?)`
-  - [ ] `cancelDelivery(orderId, reason, cancellingParty)`
-- [ ] `mappers.ts` — format Canadian addresses as Uber JSON string
-- [ ] `lib/utils/phone.ts` — normalize to E.164 `+1XXXXXXXXXX`
-- [ ] `lib/domain/delivery/manifest.ts` — default manifest item helper (`"Store order"`, size `small`, qty 1)
-- [ ] Sandbox mode flag — when `UBER_LIVE_MODE=false`:
-  - [ ] Attach `test_specifications.robo_courier_specification.mode: "auto"` on create delivery
-  - [ ] Set `live_mode: false` expectation in responses
-- [ ] Error mapping — user-friendly messages for invalid_params, expired quote, etc.
-- [ ] Unit tests for address + phone formatters
+- [x] Implement under `lib/integrations/delivery/uber/` (implements `DeliveryProvider` — see [ARCHITECTURE.md](./ARCHITECTURE.md))
+- [x] `client.ts` — OAuth client credentials, scope `eats.deliveries`, token cache with expiry refresh
+- [x] `adapter.ts` — maps domain ↔ Uber API
+  - [x] `createQuote(pickup, dropoff, pickupReady?)`
+  - [x] `createDelivery(payload)` — includes `quote_id`, manifest, lat/lng, optional schedule
+  - [x] `getDelivery(uberDeliveryId)`
+  - [x] `listDeliveries(filters?)`
+  - [x] `cancelDelivery(orderId, reason, cancellingParty)`
+- [x] `mappers.ts` — format Canadian addresses as Uber JSON string
+- [x] `lib/utils/phone.ts` — normalize to E.164 `+1XXXXXXXXXX`
+- [x] `lib/domain/delivery/manifest.ts` — default manifest item helper (`"Store order"`, size `small`, qty 1)
+- [x] Sandbox mode flag — when `UBER_LIVE_MODE=false`:
+  - [x] Attach `test_specifications.robo_courier_specification.mode: "auto"` on create delivery
+  - [x] Set `live_mode: false` expectation in responses
+- [x] Error mapping — user-friendly messages for invalid_params, expired quote, etc.
+- [x] Unit tests for address + phone formatters
 
 ---
 
 ## Phase 4 — Geocoding (Canada)
 
-- [ ] Create `lib/geocoding/mapbox.ts`
-  - [ ] Geocode single-line Canadian address
-  - [ ] Return structured: line1, city, province, postalCode, lat, lng
-  - [ ] Bias to Canada (`country=CA`)
-- [ ] `POST /api/geocode` — server route, rate-limited
-- [ ] Address validation UX rules
-  - [ ] Show parsed address preview before quote
-  - [ ] Block quote if geocode confidence too low
-- [ ] Store pickup lat/lng validated at seed time (geocode store address once)
+- [x] Create `lib/geocoding/mapbox.ts`
+  - [x] Geocode single-line Canadian address
+  - [x] Return structured: line1, city, province, postalCode, lat, lng
+  - [x] Bias to Canada (`country=CA`)
+- [x] `POST /api/geocode` — server route, rate-limited
+- [x] Address validation UX rules
+  - [x] Show parsed address preview before quote
+  - [x] Block quote if geocode confidence too low
+- [x] Store pickup lat/lng validated at seed time (geocode store address once)
 
 ---
 
 ## Phase 5 — App shell & navigation
 
-- [ ] Dashboard layout with sidebar + top bar (see STYLING.md)
-- [ ] Navigation items: **Deliveries**, **New delivery**
-- [ ] Store name + manager name in header
-- [ ] Sandbox badge when not in live mode (“Test mode — robo courier enabled”)
-- [ ] Empty states for list pages
-- [ ] Toast/alert system for success and errors
-- [ ] Loading skeletons for list and detail views
+- [x] Dashboard layout with sidebar + top bar (see STYLING.md)
+- [x] Navigation items: **Deliveries**, **New delivery**
+- [x] Store name + manager name in header
+- [x] Sandbox badge when not in live mode (“Test mode — robo courier enabled”)
+- [x] Empty states for list pages
+- [x] Toast/alert system for success and errors
+- [x] Loading skeletons for list and detail views
 
 ---
 
@@ -167,19 +167,19 @@
 
 **Route:** `/dashboard/deliveries`
 
-- [ ] Server component fetches deliveries for logged-in store (paginated, newest first)
-- [ ] Table/card list columns:
-  - [ ] Customer name
-  - [ ] Dropoff address (truncated)
-  - [ ] Status badge
-  - [ ] Fee (formatted CAD)
-  - [ ] Created date
-  - [ ] Scheduled time (if set)
-- [ ] Status filter tabs: All | Active | Scheduled | Completed | Cancelled
-- [ ] Search by customer name or external ID
-- [ ] Row click → delivery detail
-- [ ] “New delivery” primary CTA (top right)
-- [ ] Auto-refresh or SWR polling for active deliveries (30s fallback if webhooks lag)
+- [x] Server component fetches deliveries for logged-in store (paginated, newest first)
+- [x] Table/card list columns:
+  - [x] Customer name
+  - [x] Dropoff address (truncated)
+  - [x] Status badge
+  - [x] Fee (formatted CAD)
+  - [x] Created date
+  - [x] Scheduled time (if set)
+- [x] Status filter tabs: All | Active | Scheduled | Completed | Cancelled
+- [x] Search by customer name or external ID
+- [x] Row click → delivery detail
+- [x] “New delivery” primary CTA (top right)
+- [x] Auto-refresh or SWR polling for active deliveries (30s fallback if webhooks lag)
 
 ---
 
@@ -189,50 +189,50 @@
 
 ### Pickup section (read-only, from store profile)
 
-- [ ] Store name
-- [ ] Store phone
-- [ ] Store address (formatted)
+- [x] Store name
+- [x] Store phone
+- [x] Store address (formatted)
 
 ### Dropoff section (editable)
 
-- [ ] Customer name (required)
-- [ ] Customer phone (required, CA validation)
-- [ ] Dropoff address — single text field with autocomplete (Mapbox)
-- [ ] Geocoded address preview card
+- [x] Customer name (required)
+- [x] Customer phone (required, CA validation)
+- [x] Dropoff address — single text field with autocomplete (Mapbox)
+- [x] Geocoded address preview card
 
 ### Schedule section
 
-- [ ] Toggle: **ASAP** vs **Schedule pickup**
-- [ ] Date + time picker for scheduled pickup (`pickup_ready_dt`)
-  - [ ] Min: now + 15 minutes
-  - [ ] Max: per Uber limits (document in code comment)
-- [ ] Pass schedule to quote + create delivery
+- [x] Toggle: **ASAP** vs **Schedule pickup**
+- [x] Date + time picker for scheduled pickup (`pickup_ready_dt`)
+  - [x] Min: now + 15 minutes
+  - [x] Max: per Uber limits (document in code comment)
+- [x] Pass schedule to quote + create delivery
 
 ### Proof of delivery section
 
-- [ ] Toggle: **Signature required** (`dropoff_verification.signature_requirement`)
-- [ ] Toggle: **Photo proof** (`dropoff_verification.picture`)
-- [ ] Helper text explaining courier steps (from Uber POD guide)
-- [ ] Default: signature OFF, picture ON (leave at door friendly) — confirm in UI copy
+- [x] Toggle: **Signature required** (`dropoff_verification.signature_requirement`)
+- [x] Toggle: **Photo proof** (`dropoff_verification.picture`)
+- [x] Helper text explaining courier steps (from Uber POD guide)
+- [x] Default: signature OFF, picture ON (leave at door friendly) — confirm in UI copy
 
 ### Quote flow
 
-- [ ] “Get delivery quote” button (disabled until dropoff valid)
-- [ ] Call `POST /api/deliveries/quote`
-- [ ] Display quote card:
-  - [ ] Fee (CAD)
-  - [ ] Estimated pickup duration
-  - [ ] Estimated delivery time (ETA)
-  - [ ] Quote expiry countdown (~15 min)
-- [ ] Re-quote automatically if expired on submit
+- [x] “Get delivery quote” button (disabled until dropoff valid)
+- [x] Call `POST /api/deliveries/quote`
+- [x] Display quote card:
+  - [x] Fee (CAD)
+  - [x] Estimated pickup duration
+  - [x] Estimated delivery time (ETA)
+  - [x] Quote expiry countdown (~15 min)
+- [x] Re-quote automatically if expired on submit
 
 ### Send delivery
 
-- [ ] “Send delivery” primary button (enabled after valid quote)
-- [ ] Call `POST /api/deliveries`
-- [ ] Include: quote_id, pickup/dropoff, manifest, schedule, POD config, robo courier (sandbox)
-- [ ] On success → redirect to delivery detail
-- [ ] On error → inline error + preserve form state
+- [x] “Send delivery” primary button (enabled after valid quote)
+- [x] Call `POST /api/deliveries`
+- [x] Include: quote_id, pickup/dropoff, manifest, schedule, POD config, robo courier (sandbox)
+- [x] On success → redirect to delivery detail
+- [x] On error → inline error + preserve form state
 
 ---
 
@@ -368,11 +368,11 @@
 | Phase | Name | Status |
 |-------|------|--------|
 | 0 | Project foundation | [x] |
-| 1 | Database & seed | [ ] |
-| 2 | Authentication | [ ] |
-| 3 | Uber Direct client | [ ] |
-| 4 | Geocoding | [ ] |
-| 5 | App shell | [ ] |
+| 1 | Database & seed | [x] |
+| 2 | Authentication | [x] |
+| 3 | Uber Direct client | [x] |
+| 4 | Geocoding | [x] |
+| 5 | App shell | [x] |
 | 6 | Deliveries list | [ ] |
 | 7 | New delivery | [ ] |
 | 8 | Delivery detail | [ ] |

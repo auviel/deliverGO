@@ -1,0 +1,99 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Clock } from "lucide-react";
+import type { DeliveryQuote } from "@/lib/domain/delivery/types";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { formatCadFromCents } from "@/lib/utils/currency";
+import { formatDateTime } from "@/lib/utils/date";
+
+type QuoteCardProps = {
+  quote: DeliveryQuote;
+};
+
+function getRemainingSeconds(expiresAt: Date): number {
+  return Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+}
+
+function formatCountdown(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+export function QuoteCard({ quote }: QuoteCardProps) {
+  const expiresAt = new Date(quote.expiresAt);
+  const [remainingSeconds, setRemainingSeconds] = useState(() =>
+    getRemainingSeconds(expiresAt),
+  );
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setRemainingSeconds(getRemainingSeconds(expiresAt));
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [expiresAt]);
+
+  const isExpired = remainingSeconds <= 0;
+
+  return (
+    <Card className="border-accent/30 bg-accent-subtle/30">
+      <CardHeader>
+        <h2 className="text-lg font-semibold text-foreground">Delivery quote</h2>
+        <p className="mt-1 text-sm text-text-secondary">
+          Confirm the fee and timing before sending the delivery.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
+              Estimated fee
+            </p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+              {formatCadFromCents(quote.feeCents)}
+            </p>
+          </div>
+          <div
+            className={`flex items-center gap-1.5 text-sm ${isExpired ? "text-error" : "text-text-secondary"}`}
+          >
+            <Clock className="h-4 w-4" aria-hidden />
+            {isExpired ? (
+              <span>Quote expired — request a new quote</span>
+            ) : (
+              <span>Expires in {formatCountdown(remainingSeconds)}</span>
+            )}
+          </div>
+        </div>
+
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          {quote.pickupDurationMinutes !== undefined ? (
+            <div>
+              <dt className="text-text-tertiary">Pickup ETA</dt>
+              <dd className="mt-0.5 font-medium text-foreground">
+                ~{quote.pickupDurationMinutes} min
+              </dd>
+            </div>
+          ) : null}
+          {quote.dropoffEta ? (
+            <div>
+              <dt className="text-text-tertiary">Delivery ETA</dt>
+              <dd className="mt-0.5 font-medium text-foreground">
+                {formatDateTime(new Date(quote.dropoffEta))}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function isQuoteValid(quote: DeliveryQuote | null): boolean {
+  if (!quote) {
+    return false;
+  }
+
+  return getRemainingSeconds(new Date(quote.expiresAt)) > 0;
+}

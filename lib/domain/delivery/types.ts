@@ -48,3 +48,15 @@ export type DeliveryRecord = {
   liveMode: boolean;
   createdAt: Date;
 };
+
+export type DeliveryListItem = {
+  id: string;
+  externalId: string;
+  dropoffName: string;
+  dropoffAddress: string;
+  status: DeliveryStatus;
+  feeCents: number | null;
+  currency: string;
+  createdAt: Date;
+  scheduledFor: Date | null;
+};

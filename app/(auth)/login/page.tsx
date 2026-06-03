@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { LoginForm } from "@/components/features/auth/login-form";
+import { Suspense } from "react";
 
 export default function LoginPage() {
   return (
@@ -14,15 +15,9 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-surface-elevated p-6">
-          <p className="text-sm text-text-secondary">
-            Login form — Phase 2
-          </p>
-          <Link
-            href="/dashboard/deliveries"
-            className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-md bg-accent text-sm font-medium text-text-inverse transition-colors hover:bg-accent-hover"
-          >
-            Continue to dashboard (dev)
-          </Link>
+          <Suspense fallback={<p className="text-sm text-text-secondary">Loading…</p>}>
+            <LoginForm />
+          </Suspense>
         </div>
 
         <p className="mt-6 text-center text-xs text-text-tertiary">

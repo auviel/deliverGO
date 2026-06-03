@@ -38,7 +38,9 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and add your Uber sandbox credentials and `MAPBOX_ACCESS_TOKEN` when ready.
+Edit `.env` and add your Uber sandbox credentials and Mapbox token when ready.
+
+Get a Mapbox access token from [mapbox.com](https://account.mapbox.com/access-tokens/) (used for Canadian address geocoding).
 
 Generate an auth secret:
 
@@ -57,17 +59,25 @@ docker compose up -d
 Connection string (already in `.env.example`):
 
 ```
-postgresql://delivergo:delivergo@localhost:5432/delivergo?schema=public
+postgresql://delivergo:delivergo@localhost:5433/delivergo?schema=public
 ```
 
-### 4. Database (Phase 1+)
+> **Note:** Docker Postgres runs on port **5433** to avoid conflicts with a local Homebrew PostgreSQL install on 5432.
 
-After models are added in Phase 1:
+### 4. Database
 
 ```bash
 npm run db:migrate
 npm run db:seed
 ```
+
+**Seed credentials (local dev only):**
+
+| Field | Value |
+|-------|-------|
+| Email | `store.manager@delivergo.local` |
+| Password | `DeliverGODev2026!` |
+| Store | Demo Market — 280 Lester St #102, Waterloo, ON |
 
 ### 5. Run the app
 
@@ -75,10 +85,12 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to `/login`.
 
-- Dashboard: `/dashboard/deliveries`
-- Login (stub): `/login`
+- Dashboard: `/dashboard/deliveries` (requires login)
+- Login: `/login`
+- Session API: `/api/me`
+- Geocode API: `POST /api/geocode` (auth required, Canada only)
 - Health check: `/api/health`
 
 ## Scripts
@@ -87,6 +99,7 @@ Open [http://localhost:3000](http://localhost:3000).
 |---------|-------------|
 | `npm run dev` | Start dev server |
 | `npm run build` | Production build |
+| `npm run test` | Run unit tests (Vitest) |
 | `npm run lint` | ESLint |
 | `npm run db:generate` | Generate Prisma client |
 | `npm run db:migrate` | Run migrations |

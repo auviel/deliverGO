@@ -7,8 +7,11 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? "postgresql://delivergo:delivergo@localhost:5432/delivergo?schema=public",
+    url:
+      process.env.DATABASE_URL ??
+      "postgresql://delivergo:delivergo@localhost:5433/delivergo?schema=public",
   },
 });

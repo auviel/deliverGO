@@ -7,57 +7,47 @@ import type {
   ProviderQuoteRequest,
   ProviderWebhookEvent,
 } from "../types";
-import { AppError } from "@/lib/utils/errors";
+import { createUberDirectClient } from "./client";
 
-/** Uber Direct adapter — HTTP implementation added in Phase 3. */
+function getClient() {
+  return createUberDirectClient();
+}
+
 export const uberDirectAdapter: DeliveryProvider = {
   id: "uber_direct",
 
-  async createQuote(_input: ProviderQuoteRequest): Promise<ProviderQuote> {
-    throw new AppError(
-      "PROVIDER_ERROR",
-      "Uber Direct quote is not implemented yet (Phase 3).",
-      501,
-    );
+  async createQuote(input: ProviderQuoteRequest): Promise<ProviderQuote> {
+    return getClient().createQuote(input);
   },
 
   async createDelivery(
-    _input: ProviderCreateDeliveryRequest,
+    input: ProviderCreateDeliveryRequest,
   ): Promise<ProviderDelivery> {
-    throw new AppError(
-      "PROVIDER_ERROR",
-      "Uber Direct create delivery is not implemented yet (Phase 3).",
-      501,
-    );
+    return getClient().createDelivery(input);
   },
 
-  async getDelivery(_externalId: string): Promise<ProviderDelivery> {
-    throw new AppError(
-      "PROVIDER_ERROR",
-      "Uber Direct get delivery is not implemented yet (Phase 3).",
-      501,
-    );
+  async getDelivery(externalId: string): Promise<ProviderDelivery> {
+    return getClient().getDelivery(externalId);
+  },
+
+  async listDeliveries(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<ProviderDelivery[]> {
+    return getClient().listDeliveries(options);
   },
 
   async cancelDelivery(
-    _externalId: string,
-    _input: ProviderCancelRequest,
+    externalId: string,
+    input: ProviderCancelRequest,
   ): Promise<void> {
-    throw new AppError(
-      "PROVIDER_ERROR",
-      "Uber Direct cancel is not implemented yet (Phase 3).",
-      501,
-    );
+    await getClient().cancelDelivery(externalId, input);
   },
 
   async parseWebhook(
     _raw: unknown,
     _headers: Headers,
   ): Promise<ProviderWebhookEvent | null> {
-    throw new AppError(
-      "PROVIDER_ERROR",
-      "Uber webhook parsing is not implemented yet (Phase 9).",
-      501,
-    );
+    throw new Error("Uber webhook parsing is not implemented yet (Phase 9).");
   },
 };

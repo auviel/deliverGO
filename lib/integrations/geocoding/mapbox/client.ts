@@ -1,6 +1,114 @@
-/** Mapbox geocoding client — Phase 4. */
+import { AppError } from "@/lib/utils/errors";
+import { logger } from "@/lib/utils/logger";
+import type { GeocodedAddress } from "../types";
+import { getMapboxAccessToken } from "./config";
+import { mapMapboxFeatureToGeocodedAddress } from "./parser";
+import type { MapboxGeocodeResponse } from "../types";
+
+export type GeocodeOptions = {
+  proximity?: {
+    latitude: number;
+    longitude: number;
+  };
+  limit?: number;
+};
+
+function mapGeocodeError(error: unknown): never {
+  if (error instanceof AppError) {
+    throw error;
+  }
+
+  if (error instanceof Error) {
+    switch (error.message) {
+      case "GEOCODE_LOW_CONFIDENCE":
+        throw new AppError(
+          "INVALID_ADDRESS",
+          "Address could not be verified with enough confidence. Try a more complete Canadian address.",
+          400,
+        );
+      case "GEOCODE_NOT_CANADA":
+        throw new AppError(
+          "INVALID_ADDRESS",
+          "Only Canadian delivery addresses are supported.",
+          400,
+        );
+      case "GEOCODE_INCOMPLETE":
+        throw new AppError(
+          "INVALID_ADDRESS",
+          "Address is missing city or province. Please enter a complete address.",
+          400,
+        );
+      case "GEOCODE_NO_RESULTS":
+        throw new AppError(
+          "INVALID_ADDRESS",
+          "No matching address found. Check the address and try again.",
+          400,
+        );
+    }
+  }
+
+  logger.error("geocode.unhandled", { error: String(error) });
+  throw new AppError(
+    "INTERNAL_ERROR",
+    "Unable to geocode address right now. Please try again.",
+    500,
+  );
+}
+
+/** Geocode a single-line Canadian address using Mapbox. */
 export async function geocodeCanadianAddress(
-  _query: string,
-): Promise<never> {
-  throw new Error("Mapbox geocoding is not implemented yet (Phase 4).");
+  query: string,
+  options?: GeocodeOptions,
+): Promise<GeocodedAddress> {
+  try {
+    const token = getMapboxAccessToken();
+    const params = new URLSearchParams({
+      access_token: token,
+      country: "CA",
+      limit: String(options?.limit ?? 1),
+      types: "address,postcode,place",
+      autocomplete: "false",
+    });
+
+    if (options?.proximity) {
+      params.set(
+        "proximity",
+        `${options.proximity.longitude},${options.proximity.latitude}`,
+      );
+    }
+
+    const encodedQuery = encodeURIComponent(query.trim());
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?${params.toString()}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      next: { revalidate: 0 },
+    });
+
+    const body = (await response.json().catch(() => ({}))) as
+      | MapboxGeocodeResponse
+      | { message?: string };
+
+    if (!response.ok) {
+      logger.error("mapbox.geocode.failed", {
+        status: response.status,
+        message: (body as { message?: string }).message,
+      });
+      throw new AppError(
+        "INTERNAL_ERROR",
+        "Geocoding service returned an error. Please try again.",
+        502,
+      );
+    }
+
+    const feature = (body as MapboxGeocodeResponse).features?.[0];
+    if (!feature) {
+      throw new Error("GEOCODE_NO_RESULTS");
+    }
+
+    return mapMapboxFeatureToGeocodedAddress(feature);
+  } catch (error) {
+    mapGeocodeError(error);
+  }
 }
