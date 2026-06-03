@@ -10,6 +10,7 @@ import { formatDateTime } from "@/lib/utils/date";
 const baseDetail: DeliveryDetail = {
   id: "del_1",
   externalId: "DG-1",
+  providerId: "uber_direct",
   status: "en_route_to_dropoff",
   createdAt: new Date("2026-06-03T11:40:00.000Z"),
   feeCents: 1000,

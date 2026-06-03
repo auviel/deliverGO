@@ -5,10 +5,18 @@ import type {
   ProofOfDeliveryConfig,
 } from "@/lib/domain/delivery/types";
 
+export type ProviderQuoteContact = {
+  name: string;
+  phone: string;
+};
+
 export type ProviderQuoteRequest = {
   pickup: NormalizedAddress;
   dropoff: NormalizedAddress;
   pickupReadyAt?: Date;
+  pickupContact?: ProviderQuoteContact;
+  dropoffContact?: ProviderQuoteContact;
+  externalStoreId?: string;
 };
 
 export type ProviderQuote = {

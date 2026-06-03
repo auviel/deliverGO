@@ -1,4 +1,9 @@
-export type DeliveryProviderId = "uber_direct";
+export type DeliveryProviderId = "uber_direct" | "doordash_drive";
+
+export const DELIVERY_PROVIDER_LABELS: Record<DeliveryProviderId, string> = {
+  uber_direct: "Uber Direct",
+  doordash_drive: "DoorDash Drive",
+};
 
 export type DeliveryStatus =
   | "draft"
@@ -28,12 +33,18 @@ export type CreateDeliveryInput = {
 };
 
 export type DeliveryQuote = {
+  providerId: DeliveryProviderId;
   id: string;
   feeCents: number;
   currency: string;
   expiresAt: Date;
   pickupDurationMinutes?: number;
   dropoffEta?: Date;
+};
+
+export type DeliveryQuoteFailure = {
+  providerId: DeliveryProviderId;
+  error: string;
 };
 
 export type DeliveryRecord = {
@@ -88,6 +99,7 @@ export type DeliveryLocation = {
 export type DeliveryDetail = {
   id: string;
   externalId: string;
+  providerId: DeliveryProviderId;
   status: DeliveryStatus;
   createdAt: Date;
   feeCents: number | null;

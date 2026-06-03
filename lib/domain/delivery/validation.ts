@@ -14,7 +14,10 @@ const canadianPhoneSchema = z
     message: "Enter a valid Canadian phone number",
   });
 
+export const deliveryProviderIdSchema = z.enum(["uber_direct", "doordash_drive"]);
+
 export const createDeliverySchema = z.object({
+  providerId: deliveryProviderIdSchema,
   quoteId: z.string().min(1, "A valid quote is required"),
   dropoffName: z.string().min(1, "Customer name is required"),
   dropoffPhone: canadianPhoneSchema,
@@ -30,6 +33,8 @@ export const createDeliverySchema = z.object({
 
 export const createQuoteSchema = z.object({
   dropoffAddress: z.string().min(5, "Dropoff address is required"),
+  dropoffName: z.string().min(1, "Customer name is required"),
+  dropoffPhone: canadianPhoneSchema,
   scheduledPickupAt: z.coerce.date().optional(),
 });
 

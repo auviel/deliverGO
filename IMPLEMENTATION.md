@@ -1,6 +1,6 @@
 # deliverGO — Implementation Plan
 
-> Store manager dashboard for dispatching Uber Direct deliveries in Canada.  
+> Store manager dashboard for dispatching last-mile deliveries in Canada (Uber Direct v1; DoorDash Drive next).  
 > Check off tasks with `[x]` as they are completed.
 
 ---
@@ -16,6 +16,7 @@
 | Geocoding | Single dropoff text field → Mapbox Geocoding API (CA-biased) |
 | Payments | Store pays via Uber Direct account — no customer payment UI |
 | Uber env | Sandbox first; robo courier for automated test flows |
+| DoorDash env | Sandbox first; no real Dasher dispatched in sandbox |
 | Design reference | Uber Base / Direct dashboard simplicity — see [STYLING.md](./STYLING.md) |
 | Engineering | Layered modular monolith — see [ARCHITECTURE.md](./ARCHITECTURE.md) |
 
@@ -352,6 +353,186 @@
 
 ---
 
+## Phase 14 — DoorDash Drive integration
+
+> **Goal:** Add a second carrier using the existing `DeliveryProvider` boundary — no rewrite of list/detail/quote flows.  
+> **Signup:** DoorDash Developer Portal → **Drive: Request on-demand deliveries** (not Logistics or Marketplace Retail).
+
+### Architecture (reuse)
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Store Manager  │────▶│  deliverGO App   │────▶│  DoorDash Drive │
+│  (browser)      │     │  Next.js + PG    │     │  Sandbox API    │
+└─────────────────┘     └────────┬─────────┘     └────────▲────────┘
+                                 │                        │
+                                 │  webhooks              │
+                                 └────────────────────────┘
+```
+
+**Core API flow per delivery (DoorDash)**
+
+1. Geocode dropoff address (Mapbox — unchanged)
+2. `POST /drive/v2/quotes` → fee + ETA + `external_delivery_id` (accept within **5 minutes**)
+3. User confirms → `POST /drive/v2/quotes/{external_delivery_id}/accept` (or `POST /drive/v2/deliveries` if skipping quote)
+4. Save delivery record + `tracking_url`
+5. Webhook (`DASHER_CONFIRMED`, `DASHER_PICKED_UP`, `DASHER_DROPPED_OFF`, etc.) → update local status
+6. On complete → fetch POD from `Get Delivery` response
+
+**Status mapping (DoorDash → domain)**
+
+| DoorDash (examples) | Local `DeliveryStatus` |
+|---------------------|------------------------|
+| `created`, `confirmed` | `pending` |
+| `scheduled` | `scheduled` |
+| `dasher_confirmed`, en route to pickup | `en_route_to_pickup` |
+| at pickup | `arrived_at_pickup` |
+| picked up / en route to dropoff | `en_route_to_dropoff` |
+| at dropoff | `arrived_at_dropoff` |
+| `delivered` | `completed` |
+| `cancelled` | `cancelled` |
+| failed / undeliverable | `failed` |
+
+Document exact strings from sandbox responses in `lib/integrations/delivery/doordash/mappers.ts`.
+
+---
+
+### Phase 14.0 — Account & credentials
+
+- [ ] Create DoorDash Developer account → select **Drive**
+- [ ] Submit support request to enable **Canada sandbox** (non-US testing requires portal support)
+- [ ] Create sandbox credentials in Developer Portal → Credentials tab
+  - [ ] `developer_id`, `key_id`, `signing_secret`
+  - [ ] `external_business_id` (3–64 chars, stable per merchant)
+  - [ ] `external_store_id` per physical store (map from `Store.id` or dedicated field)
+- [ ] Register webhook URL in Developer Portal → Webhooks (`POST /api/webhooks/doordash`)
+- [ ] Document production access process (Drive production is gated — demo + review required)
+- [ ] Add env vars to `.env.example` and README:
+  - [ ] `DOORDASH_DEVELOPER_ID`
+  - [ ] `DOORDASH_KEY_ID`
+  - [ ] `DOORDASH_SIGNING_SECRET`
+  - [ ] `DOORDASH_EXTERNAL_BUSINESS_ID`
+  - [ ] `DOORDASH_API_BASE` (sandbox default from portal)
+  - [ ] `DOORDASH_LIVE_MODE` (`false` default)
+  - [ ] `DOORDASH_WEBHOOK_AUTHORIZATION` (if portal provides shared secret / auth header)
+
+---
+
+### Phase 14.1 — Domain & database
+
+- [ ] Extend `DeliveryProviderId` union: `"uber_direct" | "doordash_drive"`
+- [ ] Optional: **Store** field `deliveryProviderId` (default `uber_direct`) — or env-level toggle for v2.1
+- [ ] Optional: **Store** field `doordashExternalStoreId` if not derived from `Store.id`
+- [ ] Migration if new store columns added
+- [ ] Seed: document how test store maps to DoorDash `external_store_id`
+- [ ] Ensure `Delivery.providerId` can be `doordash_drive` on create (no schema change if string already flexible)
+
+---
+
+### Phase 14.2 — DoorDash client (`lib/integrations/delivery/doordash/`)
+
+- [ ] `config.ts` — load env, validate required fields, sandbox vs production base URL
+- [ ] `auth.ts` — JWT generation (HS256, max 30 min TTL, refresh before expiry)
+- [ ] `client.ts` — HTTP wrapper with auth header
+  - [ ] `createQuote(input)` → `POST /drive/v2/quotes`
+  - [ ] `acceptQuote(externalDeliveryId, options?)` → `POST /drive/v2/quotes/{id}/accept`
+  - [ ] `createDelivery(input)` → `POST /drive/v2/deliveries` (direct path, optional)
+  - [ ] `getDelivery(externalDeliveryId)` → `GET /drive/v2/deliveries/{id}`
+  - [ ] `cancelDelivery(externalDeliveryId)` → cancel endpoint per API reference
+  - [ ] `checkServiceability(input)` → optional pre-quote coverage check
+- [ ] `types.ts` — raw DoorDash request/response types
+- [ ] `errors.ts` — map API errors to user-friendly messages (unserviceable area, expired quote, invalid address)
+- [ ] Unit tests: JWT shape, address/phone mappers, status mapping
+
+---
+
+### Phase 14.3 — Adapter & mappers
+
+- [ ] `mappers.ts`
+  - [ ] `toProviderQuote` — fee (string dollars → cents), ETA fields, quote expiry (~5 min accept window)
+  - [ ] `buildQuoteRequest` — pickup/dropoff address objects, `external_delivery_id`, schedule (`pickup_time` or `dropoff_time`, not both)
+  - [ ] `buildAcceptQuoteRequest` — POD: `dropoff_options.signature`, pincode verification, SMS notifications flag
+  - [ ] `toDomainDelivery` — map `delivery_status`, `tracking_url`, courier/Dasher fields, POD URLs
+  - [ ] `mapDoorDashStatusToDomain(status: string): DeliveryStatus`
+- [ ] `adapter.ts` — implement `DeliveryProvider`
+  - [ ] `id: "doordash_drive"`
+  - [ ] `createQuote` / `createDelivery` — prefer quote → accept workflow (matches Uber UX)
+  - [ ] `getDelivery` — use `external_delivery_id` (our `externalId`) as DoorDash key
+  - [ ] `listDeliveries` — stub or paginate if needed (Uber has this; DoorDash may differ)
+  - [ ] `cancelDelivery`
+  - [ ] `parseWebhook` — verify auth/signature, map event → `ProviderWebhookEvent`
+- [ ] Register in `provider.registry.ts` (`getDeliveryProviderById`, `getDeliveryProviderForStore`)
+
+---
+
+### Phase 14.4 — Service layer (provider-aware, minimal diff)
+
+- [ ] `create-delivery.ts` — resolve provider from store; pass `liveMode` from `DOORDASH_LIVE_MODE`
+- [ ] `quote-delivery.ts` — same provider resolution
+- [ ] `sync-from-provider.ts` — already uses `getDeliveryProviderById`; verify DoorDash get + status merge
+- [ ] `sync-active-deliveries.ts` — include `doordash_drive` active deliveries
+- [ ] `cancel-delivery.ts` — DoorDash cancel reason mapping (merchant-initiated)
+- [ ] `handle-doordash-webhook.ts` — idempotency via `WebhookEvent`, status update, POD fetch on complete
+- [ ] Quote expiry: surface **5 minute** accept window in UI (Uber uses ~15 min — provider-specific copy)
+
+---
+
+### Phase 14.5 — Webhooks
+
+- [ ] `POST /api/webhooks/doordash` route
+- [ ] Verify webhook authenticity (portal-configured secret / authorization header — follow Drive docs)
+- [ ] Handle delivery lifecycle events (at minimum):
+  - [ ] Dasher assigned / confirmed
+  - [ ] Picked up
+  - [ ] Dropped off / delivered
+  - [ ] Cancelled
+- [ ] Idempotency via `WebhookEvent.eventId` (reuse model; store `providerId` in payload or event type prefix)
+- [ ] Return `200` on success
+- [ ] README: webhook URL + Canada sandbox setup steps
+- [ ] Local dev: ngrok / tunnel (same as Uber)
+
+---
+
+### Phase 14.6 — UI & UX
+
+- [x] Multi-provider quote comparison — cheapest fee marked **Recommended**, user selects carrier before send
+- [x] Parallel quotes from all configured providers; partial failures shown inline
+- [x] Quote after customer name + phone + verified address (DoorDash requires contact at quote time)
+- [x] Re-quote only the selected provider if expired on submit
+- [x] Provider label on delivery detail header
+- [ ] Store settings: provider enable/disable per store (env-based for now)
+- [ ] Provider badge on delivery list rows
+- [x] Tracking link: open provider `tracking_url` as-is (never modify)
+- [x] Sandbox indicator: generic “Test mode” works for both providers
+
+---
+
+### Phase 14.7 — Sandbox & Canada checklist
+
+- [ ] `DOORDASH_LIVE_MODE=false` in `.env.example` by default
+- [ ] Sandbox create does **not** dispatch a real Dasher (status may advance via webhooks or manual simulation — confirm in portal docs)
+- [ ] Test checklist:
+  - [ ] Quote returns fee + ETA for Canadian pickup/dropoff (after sandbox enabled)
+  - [ ] Accept quote returns `tracking_url`
+  - [ ] Webhook updates status on detail page (live poll + webhook)
+  - [ ] Cancel before pickup works
+  - [ ] Completed delivery shows signature/photo if configured
+- [ ] Production checklist:
+  - [ ] Complete DoorDash demo + production access request
+  - [ ] Set `DOORDASH_LIVE_MODE=true`
+  - [ ] Register production webhook URL
+  - [ ] Pilot one store before rollout
+
+---
+
+### Phase 14.8 — Testing
+
+- [ ] Unit tests: mappers, status map, JWT helper, webhook parser
+- [ ] Integration test: quote + accept with mocked DoorDash HTTP
+- [ ] Manual E2E in Canada sandbox: login → quote → send → track → complete
+
+---
+
 ## Future (post-v1 — not in scope now)
 
 - [ ] Roles admin + multi-store (Organizations API)
@@ -359,6 +540,7 @@
 - [ ] Return deliveries
 - [ ] Embedded map (tracking URL link-out is sufficient for v1)
 - [ ] Analytics dashboard (delivery volume, spend, avg fee)
+- [ ] SkipGo / other Canadian carriers (partner API access required)
 
 ---
 
@@ -380,6 +562,7 @@
 | 11 | Sandbox & robo courier | [x] |
 | 12 | Polish & quality | [x] |
 | 13 | Testing & deployment | [ ] |
+| 14 | DoorDash Drive | [ ] |
 
 ---
 
@@ -398,3 +581,14 @@
 - [Delivery Status Webhook](https://developer.uber.com/docs/deliveries/direct/api/webhook-dapi-statuschanged)
 - [Cancel Order](https://developer.uber.com/docs/deliveries/direct/api/v1/post-eats-orders-orderid-cancel)
 - [Uber Direct SDK (npm)](https://www.npmjs.com/package/uber-direct)
+
+### DoorDash Drive
+
+- [DoorDash Developer Portal](https://developer.doordash.com)
+- [Drive API reference](https://developer.doordash.com/en-US/api/drive/)
+- [Create & accept quotes](https://developer.doordash.com/en-US/docs/drive/how_to/quote_deliveries)
+- [Schedule deliveries](https://developer.doordash.com/en-US/docs/drive/how_to/schedule_deliveries)
+- [Manage credentials & JWT](https://developer.doordash.com/en-US/docs/drive/how_to/manage_credentials)
+- [Webhooks (Drive API)](https://developer.doordash.com/en-US/blog/webhooks-drive-api)
+- [Drive FAQs (countries, sandbox)](https://developer.doordash.com/en-US/docs/drive/overview/faqs)
+- [Get support (Canada sandbox)](https://developer.doordash.com/en-US/docs/marketplace/how_to/request_support/)

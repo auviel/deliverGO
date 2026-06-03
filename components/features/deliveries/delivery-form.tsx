@@ -8,7 +8,11 @@ import {
   AddressPreview,
   canRequestQuote,
 } from "@/components/features/deliveries/address-preview";
-import { isQuoteValid, QuoteCard } from "@/components/features/deliveries/quote-card";
+import {
+  getSelectedQuote,
+  isQuoteSelectionValid,
+  QuoteComparison,
+} from "@/components/features/deliveries/quote-comparison";
 import { CollapsibleSettingCard } from "@/components/ui/collapsible-setting-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,7 +28,13 @@ import {
   getMinScheduledPickupAt,
   toDatetimeLocalValue,
 } from "@/lib/domain/delivery/schedule";
-import type { DeliveryQuote, ProofOfDeliveryConfig } from "@/lib/domain/delivery/types";
+import {
+  DELIVERY_PROVIDER_LABELS,
+  type DeliveryProviderId,
+  type DeliveryQuote,
+  type DeliveryQuoteFailure,
+  type ProofOfDeliveryConfig,
+} from "@/lib/domain/delivery/types";
 import { formatPodConfigSummary } from "@/lib/domain/delivery/pod";
 import type { GeocodedAddress } from "@/lib/integrations/geocoding/types";
 import {
@@ -38,14 +48,16 @@ type ScheduleMode = "asap" | "scheduled";
 
 type QuoteApiResponse = {
   data: {
-    quote: {
+    quotes: Array<{
+      providerId: DeliveryProviderId;
       id: string;
       feeCents: number;
       currency: string;
       expiresAt: string;
       pickupDurationMinutes?: number;
       dropoffEta?: string;
-    };
+    }>;
+    failures: DeliveryQuoteFailure[];
     geocoded: GeocodedAddress;
   };
 };
@@ -57,8 +69,9 @@ type CreateApiResponse = {
   };
 };
 
-function parseQuote(data: QuoteApiResponse["data"]["quote"]): DeliveryQuote {
+function parseQuote(data: QuoteApiResponse["data"]["quotes"][number]): DeliveryQuote {
   return {
+    providerId: data.providerId,
     id: data.id,
     feeCents: data.feeCents,
     currency: data.currency,
@@ -95,7 +108,10 @@ export function DeliveryForm(_props: DeliveryFormProps) {
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
-  const [quote, setQuote] = useState<DeliveryQuote | null>(null);
+  const [quotes, setQuotes] = useState<DeliveryQuote[]>([]);
+  const [quoteFailures, setQuoteFailures] = useState<DeliveryQuoteFailure[]>([]);
+  const [selectedProviderId, setSelectedProviderId] =
+    useState<DeliveryProviderId | null>(null);
   const [fieldErrors, setFieldErrors] = useState<DeliveryFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isQuoting, setIsQuoting] = useState(false);
@@ -144,14 +160,16 @@ export function DeliveryForm(_props: DeliveryFormProps) {
     wasScheduledRef.current = scheduleMode === "scheduled";
   }, [scheduleMode]);
 
-  const clearQuote = useCallback(() => {
-    setQuote(null);
+  const clearQuotes = useCallback(() => {
+    setQuotes([]);
+    setQuoteFailures([]);
+    setSelectedProviderId(null);
   }, []);
 
   useEffect(() => {
-    clearQuote();
+    clearQuotes();
     quoteRequestRef.current += 1;
-  }, [dropoffAddress, scheduleMode, scheduledAt, clearQuote]);
+  }, [dropoffAddress, dropoffName, dropoffPhone, scheduleMode, scheduledAt, clearQuotes]);
 
   useEffect(() => {
     const query = dropoffAddress.trim();
@@ -200,9 +218,14 @@ export function DeliveryForm(_props: DeliveryFormProps) {
   const addressVerified =
     verifiedAddress === dropoffAddress.trim() && canRequestQuote(geocoded);
 
+  const dropoffReady =
+    dropoffName.trim().length > 0 &&
+    dropoffPhone.trim().length >= 10 &&
+    addressVerified;
+
   const requestQuote = useCallback(async () => {
     const query = dropoffAddress.trim();
-    if (!query || !addressVerified) {
+    if (!query || !dropoffReady) {
       return;
     }
 
@@ -216,6 +239,8 @@ export function DeliveryForm(_props: DeliveryFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dropoffAddress: query,
+          dropoffName: dropoffName.trim(),
+          dropoffPhone: dropoffPhone.trim(),
           ...(scheduledPickupAt ? { scheduledPickupAt: scheduledPickupAt.toISOString() } : {}),
         }),
       });
@@ -225,18 +250,25 @@ export function DeliveryForm(_props: DeliveryFormProps) {
       }
 
       if (!response.ok) {
-        setQuote(null);
+        setQuotes([]);
+        setQuoteFailures([]);
+        setSelectedProviderId(null);
         setFormError(await readApiError(response));
         return;
       }
 
       const body = (await response.json()) as QuoteApiResponse;
-      setQuote(parseQuote(body.data.quote));
+      const nextQuotes = body.data.quotes.map(parseQuote);
+      setQuotes(nextQuotes);
+      setQuoteFailures(body.data.failures);
+      setSelectedProviderId(nextQuotes[0]?.providerId ?? null);
       setGeocoded(body.data.geocoded);
       setVerifiedAddress(query);
     } catch {
       if (requestId === quoteRequestRef.current) {
-        setQuote(null);
+        setQuotes([]);
+        setQuoteFailures([]);
+        setSelectedProviderId(null);
         setFormError("Unable to get a quote. Please try again.");
       }
     } finally {
@@ -244,10 +276,10 @@ export function DeliveryForm(_props: DeliveryFormProps) {
         setIsQuoting(false);
       }
     }
-  }, [addressVerified, dropoffAddress, scheduledPickupAt]);
+  }, [dropoffName, dropoffPhone, dropoffReady, dropoffAddress, scheduledPickupAt]);
 
   useEffect(() => {
-    if (isGeocoding || !addressVerified) {
+    if (isGeocoding || !dropoffReady) {
       return;
     }
 
@@ -256,14 +288,14 @@ export function DeliveryForm(_props: DeliveryFormProps) {
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [addressVerified, isGeocoding, requestQuote, scheduledPickupAt, scheduleMode]);
+  }, [dropoffReady, isGeocoding, requestQuote, scheduledPickupAt, scheduleMode]);
 
-  const dropoffReady =
-    dropoffName.trim().length > 0 &&
-    dropoffPhone.trim().length >= 10 &&
-    addressVerified;
-
-  const canSend = dropoffReady && isQuoteValid(quote) && !isSubmitting && !isQuoting;
+  const selectedQuote = getSelectedQuote(quotes, selectedProviderId);
+  const canSend =
+    dropoffReady &&
+    isQuoteSelectionValid(quotes, selectedProviderId) &&
+    !isSubmitting &&
+    !isQuoting;
 
   function runFieldValidation() {
     const errors = validateDeliveryFormFields({
@@ -285,8 +317,8 @@ export function DeliveryForm(_props: DeliveryFormProps) {
       return;
     }
 
-    if (!quote || !isQuoteValid(quote)) {
-      setFormError("Waiting for a delivery quote. Check the address and try again.");
+    if (!selectedQuote || !isQuoteSelectionValid(quotes, selectedProviderId)) {
+      setFormError("Choose a valid delivery quote before sending.");
       return;
     }
 
@@ -298,7 +330,8 @@ export function DeliveryForm(_props: DeliveryFormProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          quoteId: quote.id,
+          providerId: selectedQuote.providerId,
+          quoteId: selectedQuote.id,
           dropoffName: dropoffName.trim(),
           dropoffPhone: dropoffPhone.trim(),
           dropoffAddress: dropoffAddress.trim(),
@@ -317,7 +350,7 @@ export function DeliveryForm(_props: DeliveryFormProps) {
       }
 
       const body = (await response.json()) as CreateApiResponse;
-      success("Delivery sent to Uber Direct.");
+      success(`Delivery sent via ${DELIVERY_PROVIDER_LABELS[selectedQuote.providerId]}.`);
       router.push(`/dashboard/deliveries/${body.data.id}`);
       router.refresh();
     } catch {
@@ -526,13 +559,20 @@ export function DeliveryForm(_props: DeliveryFormProps) {
         )}
       </CollapsibleSettingCard>
 
-      {isQuoting && !quote ? (
+      {isQuoting && quotes.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-4 text-sm text-text-secondary">
-          Getting quote…
+          Getting quotes…
         </div>
       ) : null}
 
-      {quote ? <QuoteCard quote={quote} /> : null}
+      {quotes.length > 0 ? (
+        <QuoteComparison
+          quotes={quotes}
+          failures={quoteFailures}
+          selectedProviderId={selectedProviderId}
+          onSelect={setSelectedProviderId}
+        />
+      ) : null}
 
       {formError ? (
         <p className="text-sm text-error" role="alert">
@@ -541,15 +581,15 @@ export function DeliveryForm(_props: DeliveryFormProps) {
       ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-        {quote && !isQuoteValid(quote) ? (
+        {quotes.length > 0 && !isQuoteSelectionValid(quotes, selectedProviderId) ? (
           <Button
             type="button"
             variant="secondary"
             className="w-full sm:w-auto"
-            disabled={!addressVerified || isQuoting}
+            disabled={!dropoffReady || isQuoting}
             onClick={() => void requestQuote()}
           >
-            {isQuoting ? "Getting quote…" : "Refresh quote"}
+            {isQuoting ? "Getting quotes…" : "Refresh quotes"}
           </Button>
         ) : null}
         <Button type="submit" className="w-full sm:w-auto" disabled={!canSend}>

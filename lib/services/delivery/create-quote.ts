@@ -1,17 +1,55 @@
 import { requireSessionContext } from "@/lib/auth/session";
+import { sortQuotesForDisplay } from "@/lib/domain/delivery/compare-quotes";
 import { validateScheduledPickupAt } from "@/lib/domain/delivery/schedule";
-import type { DeliveryQuote } from "@/lib/domain/delivery/types";
+import type {
+  DeliveryQuote,
+  DeliveryQuoteFailure,
+  DeliveryProviderId,
+} from "@/lib/domain/delivery/types";
 import { createQuoteSchema } from "@/lib/domain/delivery/validation";
 import { storeProfileToAddress } from "@/lib/domain/store/format";
-import { getDeliveryProviderForStore } from "@/lib/integrations/delivery/provider.registry";
+import { getEnabledDeliveryProviders } from "@/lib/integrations/delivery/provider.registry";
+import type { ProviderQuoteRequest } from "@/lib/integrations/delivery/types";
 import type { GeocodedAddress } from "@/lib/integrations/geocoding/types";
 import { geocodeAddress } from "@/lib/services/geocoding/geocode-address";
-import { AppError } from "@/lib/utils/errors";
+import { AppError, isAppError } from "@/lib/utils/errors";
+import { normalizeCanadianPhone } from "@/lib/utils/phone";
 
 export type CreateQuoteResult = {
-  quote: DeliveryQuote;
+  quotes: DeliveryQuote[];
+  failures: DeliveryQuoteFailure[];
   geocoded: GeocodedAddress;
 };
+
+function mapProviderQuote(
+  providerId: DeliveryProviderId,
+  quote: Omit<DeliveryQuote, "providerId">,
+): DeliveryQuote {
+  return { providerId, ...quote };
+}
+
+function buildQuoteRequest(
+  store: Awaited<ReturnType<typeof requireSessionContext>>["store"],
+  geocoded: GeocodedAddress,
+  scheduledPickupAt: Date | undefined,
+  dropoffName: string,
+  dropoffPhone: string,
+): ProviderQuoteRequest {
+  return {
+    pickup: storeProfileToAddress(store),
+    dropoff: geocoded.address,
+    pickupReadyAt: scheduledPickupAt,
+    pickupContact: {
+      name: store.name,
+      phone: store.phone,
+    },
+    dropoffContact: {
+      name: dropoffName,
+      phone: dropoffPhone,
+    },
+    externalStoreId: store.id,
+  };
+}
 
 export async function createQuote(input: unknown): Promise<CreateQuoteResult> {
   const { store } = await requireSessionContext();
@@ -24,17 +62,70 @@ export async function createQuote(input: unknown): Promise<CreateQuoteResult> {
     }
   }
 
+  const dropoffPhone = normalizeCanadianPhone(parsed.dropoffPhone);
+  if (!dropoffPhone) {
+    throw new AppError("VALIDATION_ERROR", "Enter a valid Canadian phone number", 400);
+  }
+
   const geocoded = await geocodeAddress({
     query: parsed.dropoffAddress,
     storeId: store.id,
   });
 
-  const provider = getDeliveryProviderForStore(store);
-  const quote = await provider.createQuote({
-    pickup: storeProfileToAddress(store),
-    dropoff: geocoded.address,
-    pickupReadyAt: parsed.scheduledPickupAt,
+  const providers = getEnabledDeliveryProviders();
+  if (providers.length === 0) {
+    throw new AppError(
+      "PROVIDER_ERROR",
+      "No delivery providers are configured. Add Uber or DoorDash credentials.",
+      500,
+    );
+  }
+
+  const quoteRequest = buildQuoteRequest(
+    store,
+    geocoded,
+    parsed.scheduledPickupAt,
+    parsed.dropoffName.trim(),
+    dropoffPhone,
+  );
+
+  const results = await Promise.allSettled(
+    providers.map(async (provider) => {
+      const quote = await provider.createQuote(quoteRequest);
+      return mapProviderQuote(provider.id, quote);
+    }),
+  );
+
+  const quotes: DeliveryQuote[] = [];
+  const failures: DeliveryQuoteFailure[] = [];
+
+  results.forEach((result, index) => {
+    const provider = providers[index]!;
+    if (result.status === "fulfilled") {
+      quotes.push(result.value);
+      return;
+    }
+
+    failures.push({
+      providerId: provider.id,
+      error: isAppError(result.reason)
+        ? result.reason.message
+        : result.reason instanceof Error
+          ? result.reason.message
+          : "Unable to get a quote",
+    });
   });
 
-  return { quote, geocoded };
+  if (quotes.length === 0) {
+    const message =
+      failures.map((failure) => failure.error).join(" ") ||
+      "No delivery quotes are available for this address.";
+    throw new AppError("PROVIDER_ERROR", message, 400);
+  }
+
+  return {
+    quotes: sortQuotesForDisplay(quotes),
+    failures,
+    geocoded,
+  };
 }

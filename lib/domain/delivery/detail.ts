@@ -88,6 +88,7 @@ export function mapDeliveryToDetail(delivery: Delivery): DeliveryDetail {
   return {
     id: delivery.id,
     externalId: delivery.externalId,
+    providerId: delivery.providerId as DeliveryDetail["providerId"],
     status,
     createdAt: delivery.createdAt,
     feeCents: delivery.feeCents,

@@ -1,15 +1,16 @@
 import type { Prisma } from "@prisma/client";
 import { requireSessionContext } from "@/lib/auth/session";
+import { isProviderLiveMode } from "@/lib/config/environment";
 import { deliveryRepository } from "@/lib/db/repositories/delivery.repository";
 import { validateScheduledPickupAt } from "@/lib/domain/delivery/schedule";
+import type { DeliveryProviderId } from "@/lib/domain/delivery/types";
 import { createDeliverySchema } from "@/lib/domain/delivery/validation";
 import {
   formatStoreProfileAddress,
   storeProfileToAddress,
 } from "@/lib/domain/store/format";
-import { getDeliveryProviderForStore } from "@/lib/integrations/delivery/provider.registry";
-import { isUberLiveMode } from "@/lib/config/environment";
-import type { ProviderDelivery } from "@/lib/integrations/delivery/types";
+import { getDeliveryProviderById } from "@/lib/integrations/delivery/provider.registry";
+import type { ProviderDelivery, ProviderQuoteRequest } from "@/lib/integrations/delivery/types";
 import { geocodeAddress } from "@/lib/services/geocoding/geocode-address";
 import { AppError, isAppError } from "@/lib/utils/errors";
 import { generateDeliveryExternalId } from "@/lib/utils/id";
@@ -24,6 +25,7 @@ export type CreateDeliveryResult = {
 export async function createDelivery(input: unknown): Promise<CreateDeliveryResult> {
   const { store } = await requireSessionContext();
   const parsed = createDeliverySchema.parse(input);
+  const providerId = parsed.providerId as DeliveryProviderId;
 
   if (parsed.scheduledPickupAt) {
     const scheduleError = validateScheduledPickupAt(parsed.scheduledPickupAt);
@@ -42,14 +44,29 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
     storeId: store.id,
   });
 
-  const provider = getDeliveryProviderForStore(store);
+  const provider = getDeliveryProviderById(providerId);
   const pickupAddress = storeProfileToAddress(store);
   const pickupFormatted = formatStoreProfileAddress(store);
-  const liveMode = isUberLiveMode();
-  const externalId = generateDeliveryExternalId();
-
+  const liveMode = isProviderLiveMode(providerId);
   let quoteId = parsed.quoteId;
+  let externalId =
+    providerId === "doordash_drive" ? parsed.quoteId : generateDeliveryExternalId();
   let providerDelivery: ProviderDelivery;
+
+  const quoteRequest: ProviderQuoteRequest = {
+    pickup: pickupAddress,
+    dropoff: geocoded.address,
+    pickupReadyAt: parsed.scheduledPickupAt,
+    pickupContact: {
+      name: store.name,
+      phone: store.phone,
+    },
+    dropoffContact: {
+      name: parsed.dropoffName.trim(),
+      phone: dropoffPhone,
+    },
+    externalStoreId: store.id,
+  };
 
   async function dispatchWithQuote(activeQuoteId: string): Promise<ProviderDelivery> {
     return provider.createDelivery({
@@ -61,7 +78,7 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
         address: pickupAddress,
       },
       dropoff: {
-        name: parsed.dropoffName,
+        name: parsed.dropoffName.trim(),
         phone: parsed.dropoffPhone,
         address: geocoded.address,
       },
@@ -75,13 +92,16 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
     providerDelivery = await dispatchWithQuote(quoteId);
   } catch (error) {
     if (isAppError(error) && error.code === "QUOTE_EXPIRED") {
-      logger.info("delivery.quote.requote", { storeId: store.id, externalId });
-      const freshQuote = await provider.createQuote({
-        pickup: pickupAddress,
-        dropoff: geocoded.address,
-        pickupReadyAt: parsed.scheduledPickupAt,
+      logger.info("delivery.quote.requote", {
+        storeId: store.id,
+        externalId,
+        providerId,
       });
+      const freshQuote = await provider.createQuote(quoteRequest);
       quoteId = freshQuote.id;
+      if (providerId === "doordash_drive") {
+        externalId = quoteId;
+      }
       providerDelivery = await dispatchWithQuote(quoteId);
     } else {
       throw error;
@@ -89,15 +109,16 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
   }
 
   const delivery = await deliveryRepository.create({
-    externalId,
+    externalId: providerId === "doordash_drive" ? quoteId : externalId,
     storeId: store.id,
+    providerId: provider.id,
     quoteId,
     pickupName: store.name,
     pickupPhone: store.phone,
     pickupAddress: pickupFormatted,
     pickupLat: store.latitude,
     pickupLng: store.longitude,
-    dropoffName: parsed.dropoffName,
+    dropoffName: parsed.dropoffName.trim(),
     dropoffPhone,
     dropoffAddress: geocoded.address.formatted,
     dropoffLat: geocoded.address.latitude,
@@ -121,6 +142,7 @@ export async function createDelivery(input: unknown): Promise<CreateDeliveryResu
     deliveryId: delivery.id,
     storeId: store.id,
     externalId: delivery.externalId,
+    providerId: delivery.providerId,
     liveMode: delivery.liveMode,
   });
 
