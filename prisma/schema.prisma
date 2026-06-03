@@ -1,0 +1,11 @@
+// deliverGO — Prisma schema
+// Models are added in Phase 1. See IMPLEMENTATION.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

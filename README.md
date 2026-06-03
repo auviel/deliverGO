@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# deliverGO
 
-## Getting Started
+Store manager dashboard for dispatching **Uber Direct** deliveries in Canada.
 
-First, run the development server:
+## Docs
+
+| Document | Purpose |
+|----------|---------|
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Code structure, layers, scaling principles |
+| [IMPLEMENTATION.md](./IMPLEMENTATION.md) | Phased build plan with checkboxes |
+| [STYLING.md](./STYLING.md) | UI tokens and component guidelines |
+
+## Stack
+
+- **Next.js 16** (App Router) + TypeScript
+- **PostgreSQL** + Prisma
+- **Tailwind CSS v4** (Uber-inspired design tokens)
+- **Uber Direct API** (sandbox + robo courier)
+
+## Prerequisites
+
+- Node.js 20+
+- Docker (for local Postgres)
+- Uber Direct sandbox credentials from [direct.uber.com](https://direct.uber.com)
+- Mapbox access token (Phase 4)
+
+## Local setup
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your Uber sandbox credentials and `MAPBOX_ACCESS_TOKEN` when ready.
+
+Generate an auth secret:
+
+```bash
+openssl rand -base64 32
+```
+
+Set the output as `AUTH_SECRET` in `.env`.
+
+### 3. Start PostgreSQL
+
+```bash
+docker compose up -d
+```
+
+Connection string (already in `.env.example`):
+
+```
+postgresql://delivergo:delivergo@localhost:5432/delivergo?schema=public
+```
+
+### 4. Database (Phase 1+)
+
+After models are added in Phase 1:
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+### 5. Run the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Dashboard: `/dashboard/deliveries`
+- Login (stub): `/login`
+- Health check: `/api/health`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build |
+| `npm run lint` | ESLint |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:migrate` | Run migrations |
+| `npm run db:studio` | Open Prisma Studio |
+| `docker compose up -d` | Start local Postgres |
 
-To learn more about Next.js, take a look at the following resources:
+## Project structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/           → Routes (thin handlers)
+components/    → UI (ui/, layout/, features/)
+lib/
+  domain/      → Types, validation, pure logic
+  services/    → Use cases
+  db/          → Prisma client + repositories
+  integrations/→ Uber, Mapbox, future carriers
+prisma/        → Schema + migrations + seed
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for full details.
 
-## Deploy on Vercel
+## Sandbox mode
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+When `UBER_LIVE_MODE=false` (default):
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- A test-mode banner appears in the dashboard
+- Robo courier is injected on delivery create (Phase 3)
+- No real drivers are dispatched
+
+## Webhooks (Phase 9)
+
+Register your webhook URL in the Uber Developer Dashboard → Settings → Ride Requests:
+
+```
+https://your-domain.com/api/webhooks/uber
+```
+
+For local development, use ngrok or Cloudflare Tunnel.
+
+## License
+
+Private — all rights reserved.
