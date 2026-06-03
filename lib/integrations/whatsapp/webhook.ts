@@ -11,6 +11,35 @@ const whatsAppTextMessageSchema = z.object({
   }),
 });
 
+const whatsAppInteractiveMessageSchema = z.object({
+  from: z.string().min(1),
+  id: z.string().min(1),
+  timestamp: z.string().optional(),
+  type: z.literal("interactive"),
+  interactive: z.discriminatedUnion("type", [
+    z.object({
+      type: z.literal("button_reply"),
+      button_reply: z.object({
+        id: z.string().min(1),
+        title: z.string().optional(),
+      }),
+    }),
+    z.object({
+      type: z.literal("list_reply"),
+      list_reply: z.object({
+        id: z.string().min(1),
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    }),
+  ]),
+});
+
+const whatsAppMessageSchema = z.union([
+  whatsAppTextMessageSchema,
+  whatsAppInteractiveMessageSchema,
+]);
+
 const whatsAppWebhookValueSchema = z.object({
   messaging_product: z.literal("whatsapp").optional(),
   metadata: z
@@ -19,7 +48,7 @@ const whatsAppWebhookValueSchema = z.object({
       phone_number_id: z.string().optional(),
     })
     .optional(),
-  messages: z.array(whatsAppTextMessageSchema).optional(),
+  messages: z.array(whatsAppMessageSchema).optional(),
   statuses: z.array(z.unknown()).optional(),
 });
 
@@ -38,13 +67,24 @@ export const whatsAppWebhookPayloadSchema = z.object({
   entry: z.array(whatsAppWebhookEntrySchema),
 });
 
-export type WhatsAppIncomingMessage = {
-  from: string;
-  messageId: string;
-  text: string;
-  phoneNumberId: string;
-  timestamp?: string;
-};
+export type WhatsAppIncomingMessage =
+  | {
+      kind: "text";
+      from: string;
+      messageId: string;
+      text: string;
+      phoneNumberId: string;
+      timestamp?: string;
+    }
+  | {
+      kind: "interactive";
+      from: string;
+      messageId: string;
+      interactiveId: string;
+      interactiveTitle: string;
+      phoneNumberId: string;
+      timestamp?: string;
+    };
 
 export function verifyWebhookChallenge(input: {
   mode: string | null;
@@ -85,6 +125,44 @@ export function verifyWebhookSignature(
   return timingSafeEqual(Buffer.from(expected), Buffer.from(received));
 }
 
+function mapMessage(
+  message: z.infer<typeof whatsAppMessageSchema>,
+  phoneNumberId: string,
+): WhatsAppIncomingMessage | null {
+  if (message.type === "text") {
+    return {
+      kind: "text",
+      from: message.from,
+      messageId: message.id,
+      text: message.text.body,
+      phoneNumberId,
+      timestamp: message.timestamp,
+    };
+  }
+
+  if (message.interactive.type === "button_reply") {
+    return {
+      kind: "interactive",
+      from: message.from,
+      messageId: message.id,
+      interactiveId: message.interactive.button_reply.id,
+      interactiveTitle: message.interactive.button_reply.title ?? "",
+      phoneNumberId,
+      timestamp: message.timestamp,
+    };
+  }
+
+  return {
+    kind: "interactive",
+    from: message.from,
+    messageId: message.id,
+    interactiveId: message.interactive.list_reply.id,
+    interactiveTitle: message.interactive.list_reply.title ?? "",
+    phoneNumberId,
+    timestamp: message.timestamp,
+  };
+}
+
 export function parseIncomingMessages(rawBody: string): WhatsAppIncomingMessage[] {
   const json = JSON.parse(rawBody) as unknown;
   const payload = whatsAppWebhookPayloadSchema.parse(json);
@@ -102,13 +180,10 @@ export function parseIncomingMessages(rawBody: string): WhatsAppIncomingMessage[
       }
 
       for (const message of change.value.messages) {
-        messages.push({
-          from: message.from,
-          messageId: message.id,
-          text: message.text.body,
-          phoneNumberId,
-          timestamp: message.timestamp,
-        });
+        const mapped = mapMessage(message, phoneNumberId);
+        if (mapped) {
+          messages.push(mapped);
+        }
       }
     }
   }

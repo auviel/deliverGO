@@ -39,7 +39,7 @@ export async function handleWhatsAppWebhook(
 
   const messages = parseIncomingMessages(rawBody);
   if (messages.length === 0) {
-    logger.info("whatsapp.webhook.ignored", { reason: "no_text_messages" });
+    logger.info("whatsapp.webhook.ignored", { reason: "no_inbound_messages" });
     return;
   }
 
@@ -95,7 +95,14 @@ export async function handleWhatsAppWebhook(
     await handleIncomingWhatsAppMessageSafe({
       storeId: store.id,
       staffPhoneE164,
-      text: message.text,
+      message:
+        message.kind === "interactive"
+          ? {
+              kind: "interactive",
+              interactiveId: message.interactiveId,
+              interactiveTitle: message.interactiveTitle,
+            }
+          : { kind: "text", text: message.text },
       phoneNumberId: message.phoneNumberId,
       isStaffAllowed,
       getConversation: () => whatsappRepository.getConversation(store.id, staffPhoneE164),

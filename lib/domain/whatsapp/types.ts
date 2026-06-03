@@ -5,7 +5,10 @@ export type WhatsAppConversationState =
   | "awaiting_confirm"
   | "awaiting_customer_pick"
   | "awaiting_address_pick"
-  | "awaiting_provider_pick";
+  | "awaiting_provider_pick"
+  | "awaiting_new_name"
+  | "awaiting_new_phone"
+  | "awaiting_new_address";
 
 export type WhatsAppAddressOption = {
   id: string;
@@ -41,55 +44,11 @@ export type WhatsAppSessionPayload = {
   currency?: string;
   dropoffEta?: string;
   providerOptions?: WhatsAppProviderOption[];
+  pendingNewName?: string;
+  pendingNewPhone?: string;
 };
 
 export const WHATSAPP_CONVERSATION_TTL_MS = 30 * 60 * 1000;
-
-export type ParsedWhatsAppCommand =
-  | { type: "help" }
-  | { type: "cancel" }
-  | { type: "yes" }
-  | { type: "pick"; index: number }
-  | { type: "customer_name"; name: string }
-  | { type: "ping" }
-  | { type: "unknown"; text: string };
-
-export function parseWhatsAppCommand(rawText: string): ParsedWhatsAppCommand {
-  const text = rawText.trim();
-  const normalized = text.toLowerCase();
-
-  if (!text) {
-    return { type: "unknown", text };
-  }
-
-  if (normalized === "help" || normalized === "?") {
-    return { type: "help" };
-  }
-
-  if (normalized === "cancel" || normalized === "no") {
-    return { type: "cancel" };
-  }
-
-  if (normalized === "yes" || normalized === "y") {
-    return { type: "yes" };
-  }
-
-  if (normalized === "ping") {
-    return { type: "ping" };
-  }
-
-  const pickMatch = normalized.match(/^(\d+)$/);
-  if (pickMatch) {
-    return { type: "pick", index: Number.parseInt(pickMatch[1]!, 10) };
-  }
-
-  const sendMatch = text.match(/^send\s+(.+)$/i);
-  if (sendMatch?.[1]?.trim()) {
-    return { type: "customer_name", name: sendMatch[1].trim() };
-  }
-
-  return { type: "customer_name", name: text };
-}
 
 export function formatFee(feeCents: number, currency: string): string {
   return new Intl.NumberFormat("en-CA", {
@@ -115,24 +74,4 @@ export function formatEta(iso?: string): string | null {
   });
 }
 
-export function buildHelpMessage(): string {
-  return [
-    "deliverGO dispatch",
-    "",
-    "Send a customer name to quote a delivery.",
-    "Reply YES to confirm.",
-    "",
-    "Commands:",
-    "HELP — this message",
-    "CANCEL — reset",
-    "PING — check bot is live",
-  ].join("\n");
-}
-
-export function buildUnauthorizedMessage(): string {
-  return "This number is not authorized to dispatch for this store.";
-}
-
-export function buildWhatsAppDisabledMessage(): string {
-  return "WhatsApp dispatch is not enabled for this store.";
-}
+export type WhatsAppConversationStateValue = WhatsAppConversationState;

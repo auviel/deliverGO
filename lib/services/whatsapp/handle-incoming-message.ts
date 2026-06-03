@@ -1,98 +1,202 @@
 import { getRecommendedQuote } from "@/lib/domain/delivery/compare-quotes";
 import { DELIVERY_PROVIDER_LABELS } from "@/lib/domain/delivery/types";
 import {
-  buildHelpMessage,
-  buildUnauthorizedMessage,
-  formatEta,
-  formatFee,
+  parseInteractiveSelection,
   parseWhatsAppCommand,
-  type WhatsAppProviderOption,
-  type WhatsAppSessionPayload,
+  type ParsedWhatsAppCommand,
+} from "@/lib/domain/whatsapp/commands";
+import {
+  buildAddressPickBody,
+  buildCustomerNotFoundMessage,
+  buildCustomerPickBody,
+  buildExistingCustomerUpdatedMessage,
+  buildHelpMessage,
+  buildNewCustomerAddressPrompt,
+  buildNewCustomerNamePrompt,
+  buildNewCustomerPhonePrompt,
+  buildProviderPickBody,
+  buildQuoteMessage,
+  buildSentMessage,
+  buildUnauthorizedMessage,
+} from "@/lib/domain/whatsapp/messages";
+import type {
+  WhatsAppConversationState,
+  WhatsAppProviderOption,
+  WhatsAppSessionPayload,
 } from "@/lib/domain/whatsapp/types";
+import { formatFee } from "@/lib/domain/whatsapp/types";
 import { isWhatsAppEnabled } from "@/lib/integrations/whatsapp/config";
-import { sendTextMessage } from "@/lib/integrations/whatsapp/client";
+import {
+  sendListMessage,
+  sendReplyButtons,
+  sendTextMessage,
+} from "@/lib/integrations/whatsapp/client";
 import { createDeliveryForStore } from "@/lib/services/delivery/create-delivery";
 import { createQuoteForStore } from "@/lib/services/delivery/create-quote";
 import { lookupCustomerForWhatsApp } from "@/lib/services/whatsapp/lookup-customer";
+import { resolveNewCustomerForWhatsApp } from "@/lib/services/whatsapp/resolve-new-customer";
 import { isAppError } from "@/lib/utils/errors";
 import { logger } from "@/lib/utils/logger";
+import { normalizeCanadianPhone } from "@/lib/utils/phone";
+
+export type WhatsAppIncomingContent =
+  | { kind: "text"; text: string }
+  | { kind: "interactive"; interactiveId: string; interactiveTitle: string };
 
 type HandleIncomingMessageInput = {
   storeId: string;
   staffPhoneE164: string;
-  text: string;
+  message: WhatsAppIncomingContent;
   phoneNumberId: string;
   isStaffAllowed: boolean;
   getConversation: () => Promise<{
-    state: string;
+    state: WhatsAppConversationState;
     payload: WhatsAppSessionPayload;
   } | null>;
   saveConversation: (input: {
-    state:
-      | "idle"
-      | "awaiting_confirm"
-      | "awaiting_customer_pick"
-      | "awaiting_address_pick"
-      | "awaiting_provider_pick";
+    state: WhatsAppConversationState;
     payload: WhatsAppSessionPayload;
   }) => Promise<void>;
   clearConversation: () => Promise<void>;
 };
 
-async function reply(to: string, body: string, phoneNumberId: string) {
+const WIZARD_STATES = new Set<WhatsAppConversationState>([
+  "awaiting_new_name",
+  "awaiting_new_phone",
+  "awaiting_new_address",
+]);
+
+async function replyText(to: string, body: string, phoneNumberId: string) {
   await sendTextMessage({ to, body, phoneNumberId });
 }
 
-function buildQuoteMessage(input: {
-  customerName: string;
-  dropoffAddress: string;
-  providerLabel: string;
-  feeCents: number;
-  currency: string;
-  dropoffEta?: string;
-}): string {
-  const eta = formatEta(input.dropoffEta);
-  const etaLine = eta ? ` · ~${eta}` : "";
-
-  return [
-    input.customerName,
-    input.dropoffAddress,
-    `${input.providerLabel} — ${formatFee(input.feeCents, input.currency)}${etaLine}`,
-    "Reply YES to send",
-  ].join("\n");
+async function replyConfirmQuote(
+  to: string,
+  body: string,
+  phoneNumberId: string,
+) {
+  try {
+    await sendReplyButtons({
+      to,
+      phoneNumberId,
+      body,
+      buttons: [
+        { id: "send", title: "Send" },
+        { id: "cancel", title: "Cancel" },
+      ],
+    });
+  } catch {
+    await replyText(to, body, phoneNumberId);
+  }
 }
 
-function buildProviderPickMessage(options: WhatsAppProviderOption[]): string {
-  const lines = options.map(
-    (option, index) =>
-      `${index + 1}. ${option.label} — ${formatFee(option.feeCents, option.currency)}`,
-  );
+function resolveCommand(
+  message: WhatsAppIncomingContent,
+  wizardActive: boolean,
+): ParsedWhatsAppCommand {
+  if (message.kind === "interactive") {
+    return parseInteractiveSelection(message.interactiveId);
+  }
 
-  return ["Choose a carrier:", ...lines, "Reply with the number."].join("\n");
+  return parseWhatsAppCommand(message.text, { wizardActive });
 }
 
-function buildAddressPickMessage(customerName: string, options: Array<{ formatted: string }>): string {
-  const lines = options.map((option, index) => `${index + 1}. ${option.formatted}`);
-  return [`${customerName} has multiple addresses:`, ...lines, "Reply with the number."].join("\n");
+async function sendCustomerPickList(
+  input: HandleIncomingMessageInput,
+  options: Array<{ id: string; name: string; phone: string; address: string }>,
+) {
+  try {
+    await sendListMessage({
+      to: input.staffPhoneE164,
+      phoneNumberId: input.phoneNumberId,
+      body: buildCustomerPickBody(),
+      buttonLabel: "Pick customer",
+      sectionTitle: "Customers",
+      rows: options.map((option) => ({
+        id: `cust:${option.id}`,
+        title: option.name.slice(0, 24),
+        description: `${option.phone} · ${option.address}`.slice(0, 72),
+      })),
+    });
+  } catch {
+    const lines = options.map(
+      (option, index) => `${index + 1}. ${option.name} · ${option.phone}`,
+    );
+    await replyText(
+      input.staffPhoneE164,
+      [buildCustomerPickBody(), ...lines, "Reply with the number."].join("\n"),
+      input.phoneNumberId,
+    );
+  }
 }
 
-function buildCustomerPickMessage(
-  options: Array<{ name: string; phone: string; address: string }>,
-): string {
-  const lines = options.map(
-    (option, index) => `${index + 1}. ${option.name} · ${option.phone} · ${option.address}`,
-  );
-  return ["Multiple customers matched:", ...lines, "Reply with the number."].join("\n");
+async function sendAddressPickList(
+  input: HandleIncomingMessageInput,
+  customerName: string,
+  options: Array<{ id: string; formatted: string }>,
+) {
+  try {
+    await sendListMessage({
+      to: input.staffPhoneE164,
+      phoneNumberId: input.phoneNumberId,
+      body: buildAddressPickBody(customerName),
+      buttonLabel: "Pick address",
+      sectionTitle: "Addresses",
+      rows: options.map((option) => ({
+        id: `addr:${option.id}`,
+        title: option.formatted.slice(0, 24),
+        description: option.formatted.slice(0, 72),
+      })),
+    });
+  } catch {
+    const lines = options.map((option, index) => `${index + 1}. ${option.formatted}`);
+    await replyText(
+      input.staffPhoneE164,
+      [buildAddressPickBody(customerName), ...lines, "Reply with the number."].join("\n"),
+      input.phoneNumberId,
+    );
+  }
+}
+
+async function sendProviderPickList(
+  input: HandleIncomingMessageInput,
+  options: WhatsAppProviderOption[],
+) {
+  try {
+    await sendListMessage({
+      to: input.staffPhoneE164,
+      phoneNumberId: input.phoneNumberId,
+      body: buildProviderPickBody(),
+      buttonLabel: "Pick carrier",
+      sectionTitle: "Carriers",
+      rows: options.map((option, index) => ({
+        id: `prov:${index}`,
+        title: option.label.slice(0, 24),
+        description: formatFee(option.feeCents, option.currency).slice(0, 72),
+      })),
+    });
+  } catch {
+    const lines = options.map(
+      (option, index) =>
+        `${index + 1}. ${option.label} — ${(option.feeCents / 100).toFixed(2)} ${option.currency}`,
+    );
+    await replyText(
+      input.staffPhoneE164,
+      [buildProviderPickBody(), ...lines, "Reply with the number."].join("\n"),
+      input.phoneNumberId,
+    );
+  }
 }
 
 async function startQuoteFlow(
   input: HandleIncomingMessageInput,
   payload: WhatsAppSessionPayload,
+  options?: { prefixMessage?: string },
 ) {
   if (!payload.customerName || !payload.dropoffPhone || !payload.dropoffAddress) {
-    await reply(
+    await replyText(
       input.staffPhoneE164,
-      "Missing customer details. Send a customer name to start again.",
+      "Missing customer details. Send a name or NEW to start again.",
       input.phoneNumberId,
     );
     await input.clearConversation();
@@ -100,6 +204,10 @@ async function startQuoteFlow(
   }
 
   try {
+    if (options?.prefixMessage) {
+      await replyText(input.staffPhoneE164, options.prefixMessage, input.phoneNumberId);
+    }
+
     const quoteResult = await createQuoteForStore(input.storeId, {
       dropoffName: payload.customerName,
       dropoffPhone: payload.dropoffPhone,
@@ -122,7 +230,7 @@ async function startQuoteFlow(
         payload: nextPayload,
       });
 
-      await reply(
+      await replyConfirmQuote(
         input.staffPhoneE164,
         buildQuoteMessage({
           customerName: payload.customerName,
@@ -162,18 +270,168 @@ async function startQuoteFlow(
       payload: nextPayload,
     });
 
-    await reply(
+    await sendProviderPickList(input, providerOptions);
+  } catch (error) {
+    const message = isAppError(error)
+      ? error.message
+      : "Unable to get a quote right now. Try again shortly.";
+    await replyText(input.staffPhoneE164, message, input.phoneNumberId);
+    await input.clearConversation();
+  }
+}
+
+async function resolveAndQuoteNewCustomer(
+  input: HandleIncomingMessageInput,
+  fields: { name: string; phone: string; address: string },
+) {
+  const resolved = await resolveNewCustomerForWhatsApp({
+    storeId: input.storeId,
+    name: fields.name,
+    phone: fields.phone,
+    addressQuery: fields.address,
+  });
+
+  if (!resolved.ok) {
+    await replyText(input.staffPhoneE164, resolved.error, input.phoneNumberId);
+    await input.clearConversation();
+    return;
+  }
+
+  const nextPayload: WhatsAppSessionPayload = {
+    customerId: resolved.data.customerId,
+    customerName: resolved.data.customerName,
+    dropoffPhone: resolved.data.dropoffPhone,
+    dropoffAddress: resolved.data.dropoffAddress,
+  };
+
+  await input.saveConversation({ state: "idle", payload: nextPayload });
+  await startQuoteFlow(input, nextPayload, {
+    prefixMessage: buildExistingCustomerUpdatedMessage(resolved.data.customerName),
+  });
+}
+
+async function handleConfirm(
+  input: HandleIncomingMessageInput,
+  payload: WhatsAppSessionPayload,
+) {
+  if (
+    !payload.quoteId ||
+    !payload.providerId ||
+    !payload.customerName ||
+    !payload.dropoffPhone ||
+    !payload.dropoffAddress
+  ) {
+    await replyText(
       input.staffPhoneE164,
-      buildProviderPickMessage(providerOptions),
+      "That quote expired. Send the customer name or NEW to start again.",
+      input.phoneNumberId,
+    );
+    await input.clearConversation();
+    return;
+  }
+
+  try {
+    const delivery = await createDeliveryForStore(
+      input.storeId,
+      {
+        providerId: payload.providerId,
+        quoteId: payload.quoteId,
+        dropoffName: payload.customerName,
+        dropoffPhone: payload.dropoffPhone,
+        dropoffAddress: payload.dropoffAddress,
+        proofOfDelivery: {
+          signature: false,
+          picture: true,
+          pincode: true,
+        },
+      },
+      { source: "whatsapp" },
+    );
+
+    await input.clearConversation();
+    await replyText(
+      input.staffPhoneE164,
+      buildSentMessage({
+        externalId: delivery.externalId,
+        trackingUrl: delivery.trackingUrl,
+      }),
       input.phoneNumberId,
     );
   } catch (error) {
     const message = isAppError(error)
       ? error.message
-      : "Unable to get a quote right now. Try again shortly.";
-    await reply(input.staffPhoneE164, message, input.phoneNumberId);
+      : "Unable to create the delivery. Try quoting again.";
+    await replyText(input.staffPhoneE164, message, input.phoneNumberId);
     await input.clearConversation();
   }
+}
+
+async function handleCustomerLookup(
+  input: HandleIncomingMessageInput,
+  query: string,
+  customerId?: string,
+) {
+  const lookup = await lookupCustomerForWhatsApp({
+    storeId: input.storeId,
+    query,
+    customerId,
+  });
+
+  if (lookup.type === "not_found") {
+    await replyText(
+      input.staffPhoneE164,
+      buildCustomerNotFoundMessage(lookup.query),
+      input.phoneNumberId,
+    );
+    await input.clearConversation();
+    return;
+  }
+
+  if (lookup.type === "incomplete") {
+    await replyText(
+      input.staffPhoneE164,
+      `${lookup.customerName}: ${lookup.reason}\nReply NEW to add details.`,
+      input.phoneNumberId,
+    );
+    await input.clearConversation();
+    return;
+  }
+
+  if (lookup.type === "multiple_customers") {
+    await input.saveConversation({
+      state: "awaiting_customer_pick",
+      payload: {
+        customerName: query,
+        customerOptions: lookup.options,
+      },
+    });
+    await sendCustomerPickList(input, lookup.options);
+    return;
+  }
+
+  if (lookup.type === "multiple_addresses") {
+    await input.saveConversation({
+      state: "awaiting_address_pick",
+      payload: {
+        customerId: lookup.customer.id,
+        customerName: lookup.customer.name,
+        dropoffPhone: lookup.dropoffPhone,
+        addressOptions: lookup.addressOptions,
+      },
+    });
+    await sendAddressPickList(input, lookup.customer.name, lookup.addressOptions);
+    return;
+  }
+
+  const nextPayload: WhatsAppSessionPayload = {
+    customerId: lookup.customer.id,
+    customerName: lookup.customer.name,
+    dropoffPhone: lookup.dropoffPhone,
+    dropoffAddress: lookup.dropoffAddress,
+  };
+
+  await input.saveConversation({ state: "idle", payload: nextPayload });
+  await startQuoteFlow(input, nextPayload);
 }
 
 export async function handleIncomingWhatsAppMessage(
@@ -184,84 +442,113 @@ export async function handleIncomingWhatsAppMessage(
   }
 
   if (!input.isStaffAllowed) {
-    await reply(input.staffPhoneE164, buildUnauthorizedMessage(), input.phoneNumberId);
+    await replyText(input.staffPhoneE164, buildUnauthorizedMessage(), input.phoneNumberId);
     return;
   }
 
-  const command = parseWhatsAppCommand(input.text);
   const conversation = await input.getConversation();
   const payload = conversation?.payload ?? {};
+  const state = conversation?.state ?? "idle";
+  const wizardActive = WIZARD_STATES.has(state);
+  const command = resolveCommand(input.message, wizardActive);
 
   if (command.type === "help") {
-    await reply(input.staffPhoneE164, buildHelpMessage(), input.phoneNumberId);
+    await replyText(input.staffPhoneE164, buildHelpMessage(), input.phoneNumberId);
     return;
   }
 
   if (command.type === "ping") {
-    await reply(input.staffPhoneE164, "pong", input.phoneNumberId);
+    await replyText(input.staffPhoneE164, "pong", input.phoneNumberId);
     return;
   }
 
   if (command.type === "cancel") {
     await input.clearConversation();
-    await reply(input.staffPhoneE164, "Cancelled.", input.phoneNumberId);
+    await replyText(input.staffPhoneE164, "Cancelled.", input.phoneNumberId);
     return;
   }
 
-  if (conversation?.state === "awaiting_confirm" && command.type === "yes") {
-    if (!payload.quoteId || !payload.providerId || !payload.customerName || !payload.dropoffPhone || !payload.dropoffAddress) {
-      await reply(
-        input.staffPhoneE164,
-        "That quote expired. Send the customer name again.",
-        input.phoneNumberId,
-      );
-      await input.clearConversation();
+  if (state === "awaiting_new_name" && command.type === "wizard_input") {
+    const name = command.text.trim();
+    if (!name) {
+      await replyText(input.staffPhoneE164, buildNewCustomerNamePrompt(), input.phoneNumberId);
       return;
     }
 
-    try {
-      const delivery = await createDeliveryForStore(
-        input.storeId,
-        {
-          providerId: payload.providerId,
-          quoteId: payload.quoteId,
-          dropoffName: payload.customerName,
-          dropoffPhone: payload.dropoffPhone,
-          dropoffAddress: payload.dropoffAddress,
-          proofOfDelivery: {
-            signature: false,
-            picture: true,
-            pincode: true,
-          },
-        },
-        { source: "whatsapp" },
-      );
-
-      await input.clearConversation();
-
-      const lines = ["Sent ✓", `Ref: ${delivery.externalId}`];
-      if (delivery.trackingUrl) {
-        lines.push(`Track: ${delivery.trackingUrl}`);
-      }
-
-      await reply(input.staffPhoneE164, lines.join("\n"), input.phoneNumberId);
-    } catch (error) {
-      const message = isAppError(error)
-        ? error.message
-        : "Unable to create the delivery. Try quoting again.";
-      await reply(input.staffPhoneE164, message, input.phoneNumberId);
-      await input.clearConversation();
-    }
-
+    await input.saveConversation({
+      state: "awaiting_new_phone",
+      payload: { pendingNewName: name },
+    });
+    await replyText(
+      input.staffPhoneE164,
+      buildNewCustomerPhonePrompt(name),
+      input.phoneNumberId,
+    );
     return;
   }
 
-  if (conversation?.state === "awaiting_address_pick" && command.type === "pick") {
-    const address = payload.addressOptions?.[command.index - 1];
-    if (!address || !payload.customerId) {
-      await reply(
+  if (state === "awaiting_new_phone" && command.type === "wizard_input") {
+    const phone = normalizeCanadianPhone(command.text);
+    if (!phone || !payload.pendingNewName) {
+      await replyText(
         input.staffPhoneE164,
-        "Invalid option. Reply with the number from the list or CANCEL.",
+        "Enter a valid Canadian phone number.",
+        input.phoneNumberId,
+      );
+      return;
+    }
+
+    await input.saveConversation({
+      state: "awaiting_new_address",
+      payload: {
+        pendingNewName: payload.pendingNewName,
+        pendingNewPhone: phone,
+      },
+    });
+    await replyText(
+      input.staffPhoneE164,
+      buildNewCustomerAddressPrompt(payload.pendingNewName),
+      input.phoneNumberId,
+    );
+    return;
+  }
+
+  if (state === "awaiting_new_address" && command.type === "wizard_input") {
+    if (!payload.pendingNewName || !payload.pendingNewPhone) {
+      await input.clearConversation();
+      await replyText(input.staffPhoneE164, "Session expired. Send NEW to start again.", input.phoneNumberId);
+      return;
+    }
+
+    await resolveAndQuoteNewCustomer(input, {
+      name: payload.pendingNewName,
+      phone: payload.pendingNewPhone,
+      address: command.text.trim(),
+    });
+    return;
+  }
+
+  if (state === "awaiting_confirm" && command.type === "yes") {
+    await handleConfirm(input, payload);
+    return;
+  }
+
+  if (state === "awaiting_address_pick") {
+    let addressId: string | undefined;
+
+    if (command.type === "pick") {
+      addressId = payload.addressOptions?.[command.index - 1]?.id;
+    } else if (
+      command.type === "interactive" &&
+      command.id.toLowerCase().startsWith("addr:")
+    ) {
+      addressId = command.id.slice("addr:".length);
+    }
+
+    if (!addressId || !payload.customerId) {
+      await replyText(
+        input.staffPhoneE164,
+        "Invalid option. Pick from the list or send CANCEL.",
         input.phoneNumberId,
       );
       return;
@@ -271,11 +558,11 @@ export async function handleIncomingWhatsAppMessage(
       storeId: input.storeId,
       query: payload.customerName ?? "",
       customerId: payload.customerId,
-      addressId: address.id,
+      addressId,
     });
 
     if (lookup.type !== "ready") {
-      await reply(
+      await replyText(
         input.staffPhoneE164,
         "Unable to use that address. Send the customer name again.",
         input.phoneNumberId,
@@ -296,12 +583,22 @@ export async function handleIncomingWhatsAppMessage(
     return;
   }
 
-  if (conversation?.state === "awaiting_customer_pick" && command.type === "pick") {
-    const customer = payload.customerOptions?.[command.index - 1];
-    if (!customer) {
-      await reply(
+  if (state === "awaiting_customer_pick") {
+    let customerId: string | undefined;
+
+    if (command.type === "pick") {
+      customerId = payload.customerOptions?.[command.index - 1]?.id;
+    } else if (
+      command.type === "interactive" &&
+      command.id.toLowerCase().startsWith("cust:")
+    ) {
+      customerId = command.id.slice("cust:".length);
+    }
+
+    if (!customerId) {
+      await replyText(
         input.staffPhoneE164,
-        "Invalid option. Reply with the number from the list or CANCEL.",
+        "Invalid option. Pick from the list or send CANCEL.",
         input.phoneNumberId,
       );
       return;
@@ -309,8 +606,8 @@ export async function handleIncomingWhatsAppMessage(
 
     const lookup = await lookupCustomerForWhatsApp({
       storeId: input.storeId,
-      query: customer.name,
-      customerId: customer.id,
+      query: payload.customerName ?? "",
+      customerId,
     });
 
     if (lookup.type === "multiple_addresses") {
@@ -323,17 +620,12 @@ export async function handleIncomingWhatsAppMessage(
           addressOptions: lookup.addressOptions,
         },
       });
-
-      await reply(
-        input.staffPhoneE164,
-        buildAddressPickMessage(lookup.customer.name, lookup.addressOptions),
-        input.phoneNumberId,
-      );
+      await sendAddressPickList(input, lookup.customer.name, lookup.addressOptions);
       return;
     }
 
     if (lookup.type !== "ready") {
-      await reply(
+      await replyText(
         input.staffPhoneE164,
         "Unable to use that customer. Send the customer name again.",
         input.phoneNumberId,
@@ -354,12 +646,12 @@ export async function handleIncomingWhatsAppMessage(
     return;
   }
 
-  if (conversation?.state === "awaiting_provider_pick" && command.type === "pick") {
+  if (state === "awaiting_provider_pick" && command.type === "pick") {
     const option = payload.providerOptions?.[command.index - 1];
     if (!option) {
-      await reply(
+      await replyText(
         input.staffPhoneE164,
-        "Invalid option. Reply with the number from the list or CANCEL.",
+        "Invalid option. Pick from the list or send CANCEL.",
         input.phoneNumberId,
       );
       return;
@@ -379,7 +671,7 @@ export async function handleIncomingWhatsAppMessage(
       payload: nextPayload,
     });
 
-    await reply(
+    await replyConfirmQuote(
       input.staffPhoneE164,
       buildQuoteMessage({
         customerName: payload.customerName ?? "Customer",
@@ -394,94 +686,74 @@ export async function handleIncomingWhatsAppMessage(
     return;
   }
 
-  if (command.type === "customer_name") {
-    const lookup = await lookupCustomerForWhatsApp({
-      storeId: input.storeId,
-      query: command.name,
-      customerId: payload.customerId,
-    });
-
-    if (lookup.type === "not_found") {
-      await reply(
-        input.staffPhoneE164,
-        `No customer found for "${lookup.query}". Add them in the dashboard first.`,
-        input.phoneNumberId,
-      );
-      await input.clearConversation();
-      return;
-    }
-
-    if (lookup.type === "incomplete") {
-      await reply(
-        input.staffPhoneE164,
-        `${lookup.customerName}: ${lookup.reason}`,
-        input.phoneNumberId,
-      );
-      await input.clearConversation();
-      return;
-    }
-
-    if (lookup.type === "multiple_customers") {
+  if (command.type === "new_wizard") {
+    if (command.name && command.phone) {
       await input.saveConversation({
-        state: "awaiting_customer_pick",
+        state: "awaiting_new_address",
         payload: {
-          customerName: command.name,
-          customerOptions: lookup.options,
+          pendingNewName: command.name,
+          pendingNewPhone: command.phone,
         },
       });
-
-      await reply(
+      await replyText(
         input.staffPhoneE164,
-        buildCustomerPickMessage(lookup.options),
+        buildNewCustomerAddressPrompt(command.name),
         input.phoneNumberId,
       );
       return;
     }
 
-    if (lookup.type === "multiple_addresses") {
+    if (command.name) {
       await input.saveConversation({
-        state: "awaiting_address_pick",
-        payload: {
-          customerId: lookup.customer.id,
-          customerName: lookup.customer.name,
-          dropoffPhone: lookup.dropoffPhone,
-          addressOptions: lookup.addressOptions,
-        },
+        state: "awaiting_new_phone",
+        payload: { pendingNewName: command.name },
       });
-
-      await reply(
+      await replyText(
         input.staffPhoneE164,
-        buildAddressPickMessage(lookup.customer.name, lookup.addressOptions),
+        buildNewCustomerPhonePrompt(command.name),
         input.phoneNumberId,
       );
       return;
     }
 
-    const nextPayload: WhatsAppSessionPayload = {
-      customerId: lookup.customer.id,
-      customerName: lookup.customer.name,
-      dropoffPhone: lookup.dropoffPhone,
-      dropoffAddress: lookup.dropoffAddress,
-    };
-
-    await input.saveConversation({ state: "idle", payload: nextPayload });
-    await startQuoteFlow(input, nextPayload);
+    await input.saveConversation({ state: "awaiting_new_name", payload: {} });
+    await replyText(
+      input.staffPhoneE164,
+      buildNewCustomerNamePrompt(),
+      input.phoneNumberId,
+    );
     return;
   }
 
-  if (conversation?.state === "awaiting_confirm") {
-    await reply(
+  if (command.type === "new_one_line") {
+    await resolveAndQuoteNewCustomer(input, {
+      name: command.name,
+      phone: command.phone,
+      address: command.address,
+    });
+    return;
+  }
+
+  if (command.type === "customer_name") {
+    await handleCustomerLookup(input, command.name);
+    return;
+  }
+
+  if (state === "awaiting_confirm") {
+    await replyText(
       input.staffPhoneE164,
-      "Reply YES to send this delivery or CANCEL to reset.",
+      "Tap Send or reply YES. CANCEL to reset.",
       input.phoneNumberId,
     );
     return;
   }
 
   if (command.type === "unknown") {
-    await reply(
+    await replyText(
       input.staffPhoneE164,
-      "Send a customer name to quote, or reply HELP.",
+      command.text.includes("NEW block")
+        ? command.text
+        : "Send a customer name, NEW for a new customer, or HELP.",
       input.phoneNumberId,
     );
   }
@@ -498,7 +770,7 @@ export async function handleIncomingWhatsAppMessageSafe(
       error: error instanceof Error ? error.message : String(error),
     });
 
-    await reply(
+    await replyText(
       input.staffPhoneE164,
       "Something went wrong. Try again or send HELP.",
       input.phoneNumberId,
