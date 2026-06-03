@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { DashboardPage, DashboardPageBody, PageHeader } from "../../layout";
+import { DashboardPage, DashboardPageBody } from "../../layout";
 import { DeliveryDetailView } from "@/components/features/deliveries/delivery-detail-view";
 import { getDelivery } from "@/lib/services/delivery/get-delivery";
 import { isAppError } from "@/lib/utils/errors";
@@ -16,10 +16,6 @@ export default async function DeliveryDetailPage({ params }: PageProps) {
 
     return (
       <DashboardPage>
-        <PageHeader
-          title={delivery.dropoff.name}
-          description={`Delivery to ${delivery.dropoff.address}`}
-        />
         <DashboardPageBody>
           <DeliveryDetailView delivery={delivery} />
         </DashboardPageBody>

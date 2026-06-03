@@ -1,18 +1,16 @@
-import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { CancelDeliveryButton } from "@/components/features/deliveries/delivery-cancel-button";
 import { DeliveryCourierSection } from "@/components/features/deliveries/delivery-courier-section";
+import { DeliveryDetailHeader } from "@/components/features/deliveries/delivery-detail-header";
 import { DeliveryDetailRefresh } from "@/components/features/deliveries/delivery-detail-refresh";
 import { DeliveryLocationCard } from "@/components/features/deliveries/delivery-location-card";
 import { DeliveryProofSection } from "@/components/features/deliveries/delivery-proof-section";
-import { DeliveryStatusBadge } from "@/components/features/deliveries/delivery-status-badge";
 import { DeliveryStatusTimeline } from "@/components/features/deliveries/delivery-status-timeline";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatPodConfigSummary } from "@/lib/domain/delivery/pod";
 import { shouldRefreshDeliveryDetail } from "@/lib/domain/delivery/timeline";
 import type { DeliveryDetail } from "@/lib/domain/delivery/types";
 import { formatCadFromCents } from "@/lib/utils/currency";
-import { formatDateTime } from "@/lib/utils/date";
 
 type DeliveryDetailViewProps = {
   delivery: DeliveryDetail;
@@ -29,37 +27,7 @@ export function DeliveryDetailView({ delivery }: DeliveryDetailViewProps) {
     <div className="space-y-6">
       <DeliveryDetailRefresh enabled={shouldRefreshDeliveryDetail(delivery.status)} />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2 gap-y-1">
-            <DeliveryStatusBadge status={delivery.status} />
-            <span className="break-all font-mono text-xs text-text-tertiary sm:break-normal sm:truncate">
-              {delivery.externalId}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-text-secondary">
-            Created {formatDateTime(delivery.createdAt)}
-          </p>
-          {delivery.scheduledFor ? (
-            <p className="mt-1 text-sm text-text-secondary">
-              Scheduled pickup {formatDateTime(delivery.scheduledFor)}
-            </p>
-          ) : null}
-          {delivery.cancelledAt ? (
-            <p className="mt-1 text-sm text-text-secondary">
-              Cancelled {formatDateTime(delivery.cancelledAt)}
-              {delivery.cancelReason ? ` · ${delivery.cancelReason}` : ""}
-            </p>
-          ) : null}
-        </div>
-
-        <Link
-          href="/dashboard/deliveries"
-          className="shrink-0 text-sm font-medium text-text-secondary transition-colors hover:text-foreground"
-        >
-          ← Back to deliveries
-        </Link>
-      </div>
+      <DeliveryDetailHeader delivery={delivery} />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
