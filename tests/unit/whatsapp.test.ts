@@ -10,7 +10,7 @@ import {
   parsePlainCustomerOneLine,
   parseWhatsAppCommand,
 } from "@/lib/domain/whatsapp/commands";
-import { buildHelpMessage } from "@/lib/domain/whatsapp/messages";
+import { buildHelpMessage, buildSentMessage } from "@/lib/domain/whatsapp/messages";
 import {
   parseIncomingMessages,
   verifyWebhookChallenge,
@@ -154,6 +154,24 @@ describe("whatsapp command parser", () => {
 
   it("builds a short help message", () => {
     expect(buildHelpMessage()).toContain("NEW");
+  });
+
+  it("builds sent confirmation with name, address, and tracking", () => {
+    expect(
+      buildSentMessage({
+        customerName: "Val T",
+        dropoffAddress: "123 Roger St, Waterloo, ON",
+        trackingUrl: "https://delivery.uber.com/track/abc",
+      }),
+    ).toBe(
+      "✅ Sent\n📦 Val T\n📍 123 Roger St, Waterloo, ON\nTrack: https://delivery.uber.com/track/abc",
+    );
+    expect(
+      buildSentMessage({
+        customerName: "Val T",
+        dropoffAddress: "123 Roger St, Waterloo, ON",
+      }),
+    ).not.toContain("Ref:");
   });
 
   it("parses one-line NEW with comma delimiter", () => {

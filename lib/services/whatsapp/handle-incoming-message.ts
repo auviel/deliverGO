@@ -352,7 +352,8 @@ async function handleConfirm(
     await replyText(
       input.staffPhoneE164,
       buildSentMessage({
-        externalId: delivery.externalId,
+        customerName: payload.customerName,
+        dropoffAddress: payload.dropoffAddress,
         trackingUrl: delivery.trackingUrl,
       }),
       input.phoneNumberId,

@@ -34,11 +34,21 @@ export function buildQuoteMessage(input: {
   ].join("\n");
 }
 
-export function buildSentMessage(input: { externalId: string; trackingUrl?: string }): string {
-  const lines = [`✅ Sent`, `Ref: ${input.externalId}`];
+export function buildSentMessage(input: {
+  customerName: string;
+  dropoffAddress: string;
+  trackingUrl?: string;
+}): string {
+  const lines = [
+    "✅ Sent",
+    `📦 ${input.customerName}`,
+    `📍 ${input.dropoffAddress}`,
+  ];
+
   if (input.trackingUrl) {
     lines.push(`Track: ${input.trackingUrl}`);
   }
+
   return lines.join("\n");
 }
 
